@@ -393,7 +393,8 @@ def _derive_carrier_status(fields: dict[str, str], page_text_lower: str) -> str:
               default → INACTIVE (conservative)
     """
     oos = fields.get("oos_date", "").strip().lower()
-    if oos and oos not in ("", "none", "n/a", "-"):
+    _date_pat = re.compile(r'\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}')
+    if oos and oos not in ("", "none", "n/a", "-") and _date_pat.search(oos):
         return "OUT_OF_SERVICE"
 
     auth = (fields.get("operating_authority_status", "") + " " +
