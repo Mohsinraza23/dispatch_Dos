@@ -636,6 +636,62 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
     color: #059669; background: rgba(16,185,129,0.12);
     padding: 3px 12px; border-radius: 99px;
 }
+
+/* ══════════════════════════════════════════════════════
+   8. FEATURE STATS BAR
+══════════════════════════════════════════════════════ */
+.stats-bar {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    margin: 0 0 24px;
+    animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.1s both;
+}
+.stat-card {
+    flex: 1; min-width: 130px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 18px 16px;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    position: relative; overflow: hidden;
+}
+.stat-card::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+}
+.stat-card.sc-blue::before   { background: linear-gradient(90deg,#2563eb,#60a5fa); }
+.stat-card.sc-green::before  { background: linear-gradient(90deg,#059669,#34d399); }
+.stat-card.sc-purple::before { background: linear-gradient(90deg,#7c3aed,#a78bfa); }
+.stat-card.sc-orange::before { background: linear-gradient(90deg,#d97706,#fbbf24); }
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.1);
+    border-color: #bfdbfe;
+}
+.stat-card .sc-icon {
+    font-size: 1.8rem; line-height: 1;
+    margin-bottom: 8px; display: block;
+}
+.stat-card .sc-val {
+    font-size: 1.55rem; font-weight: 800;
+    letter-spacing: -0.04em; line-height: 1;
+    margin-bottom: 4px;
+}
+.stat-card.sc-blue   .sc-val { color: #2563eb; }
+.stat-card.sc-green  .sc-val { color: #059669; }
+.stat-card.sc-purple .sc-val { color: #7c3aed; }
+.stat-card.sc-orange .sc-val { color: #d97706; }
+.stat-card .sc-lbl {
+    font-size: .68rem; font-weight: 600; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+.stat-card .sc-sub {
+    font-size: .72rem; color: #64748b; margin-top: 2px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1388,6 +1444,36 @@ st.markdown(
     '</div>',
     unsafe_allow_html=True,
 )
+
+# ── Feature Stats Bar ─────────────────────────────────────────────────────────
+st.markdown("""
+<div class="stats-bar">
+  <div class="stat-card sc-blue">
+    <span class="sc-icon">🚛</span>
+    <div class="sc-val">500+</div>
+    <div class="sc-lbl">Carriers Per Run</div>
+    <div class="sc-sub">Bulk scrape in one go</div>
+  </div>
+  <div class="stat-card sc-green">
+    <span class="sc-icon">📊</span>
+    <div class="sc-val">30+</div>
+    <div class="sc-lbl">Data Fields</div>
+    <div class="sc-sub">Name · Address · Safety · Fleet</div>
+  </div>
+  <div class="stat-card sc-purple">
+    <span class="sc-icon">⚡</span>
+    <div class="sc-val">Auto</div>
+    <div class="sc-lbl">Dedup + Detect</div>
+    <div class="sc-sub">MC / USDOT auto-detected</div>
+  </div>
+  <div class="stat-card sc-orange">
+    <span class="sc-icon">📥</span>
+    <div class="sc-val">Free</div>
+    <div class="sc-lbl">Excel + CSV Export</div>
+    <div class="sc-sub">4-sheet report, instant download</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Quick-start instructions ──────────────────────────────────────────────────
 with st.expander("📖 How to use this tool", expanded=False):
