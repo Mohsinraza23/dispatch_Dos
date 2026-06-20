@@ -32,7 +32,7 @@ from typing import Any
 # ── third-party ───────────────────────────────────────────────────────────────
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+import plotly.express as px
 
 # ── local ─────────────────────────────────────────────────────────────────────
 from fmcsa_scraper import (
@@ -736,44 +736,7 @@ _init()
 # JS — hover-to-open for all expanders
 # ─────────────────────────────────────────────────────────────────────────────
 
-components.html("""
-<script>
-(function() {
-    const doc = window.parent.document;
-
-    function attachHover() {
-        doc.querySelectorAll('details').forEach(function(el) {
-            if (el._hoverReady) return;
-            el._hoverReady = true;
-
-            el.addEventListener('mouseenter', function() {
-                if (!el.open) {
-                    el.open = true;
-                    el._byHover = true;
-                }
-            });
-            el.addEventListener('mouseleave', function() {
-                if (el._byHover) {
-                    el.open = false;
-                    el._byHover = false;
-                }
-            });
-            // If user clicks manually, don't close on mouse leave
-            el.querySelector('summary') && el.querySelector('summary')
-              .addEventListener('click', function() {
-                el._byHover = false;
-            });
-        });
-    }
-
-    // Run now and watch for Streamlit re-renders
-    attachHover();
-    new MutationObserver(attachHover).observe(doc.body, {
-        childList: true, subtree: true
-    });
-})();
-</script>
-""", height=0)
+# hover-to-open JS removed (components.html deprecated)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1340,6 +1303,19 @@ with st.sidebar:
         help="Use a real browser if the fast method gets blocked (experimental).",
     )
 
+    st.markdown('<div class="sb-lbl">🔄 Proxy (optional)</div>', unsafe_allow_html=True)
+    proxy_input = st.text_input(
+        "Proxy URL", value="", placeholder="http://user:pass@host:port",
+        help="Optional HTTP/HTTPS proxy. Leave blank to use your direct IP.",
+        label_visibility="collapsed",
+    )
+    if proxy_input.strip():
+        st.markdown(
+            '<div style="font-size:.72rem;color:#22c55e;margin-top:-8px">'
+            '✓ Proxy set</div>',
+            unsafe_allow_html=True,
+        )
+
     st.markdown("---")
     st.markdown('<div class="sb-lbl">ℹ️ About</div>', unsafe_allow_html=True)
     st.markdown(
@@ -1357,7 +1333,7 @@ _current_settings: dict[str, Any] = {
     "max_concurrent":      3,
     "playwright_fallback": playwright_fallback,
     "headless":            True,
-    "proxy":               None,
+    "proxy":               proxy_input.strip() or None,
     "skip_type_retry":     False,   # set True for range search
     "web_key":             fmcsa_web_key.strip(),
 }
@@ -1557,7 +1533,7 @@ if st.session_state.carrier_ids:
     st.dataframe(
         pd.DataFrame({"#": range(1, preview_n + 1),
                       "Carrier_ID": st.session_state.carrier_ids[:preview_n]}),
-        use_container_width=True, height=200, hide_index=True,
+        width="stretch", height=200, hide_index=True,
         column_config={
             "#":          st.column_config.NumberColumn(width="small"),
             "Carrier_ID": st.column_config.TextColumn("Carrier ID", width="large"),
@@ -1572,7 +1548,7 @@ if st.session_state.carrier_ids:
         with st.expander(f"🔍 {len(st.session_state.dupes_removed)} duplicates removed"):
             st.dataframe(
                 pd.DataFrame({"Duplicate": st.session_state.dupes_removed}),
-                use_container_width=True, height=180, hide_index=True,
+                width="stretch", height=180, hide_index=True,
             )
 
 
@@ -1761,40 +1737,7 @@ if rows:
         (counts["blocked"],        "Blocked",         "c-purple"),
     )
 
-    # 3. Metric cards counter — numbers count up from 0
-    components.html("""
-<script>
-(function() {
-    function runCounters() {
-        const doc = window.parent.document;
-        doc.querySelectorAll('.mc-card .val').forEach(function(el) {
-            if (el._counted) return;
-            const raw = el.innerText.trim();
-            const target = parseInt(raw);
-            if (isNaN(target) || target <= 1) return;
-            el._counted = true;
-            let current = 0;
-            const duration = 700;
-            const steps = 40;
-            const increment = target / steps;
-            const interval = duration / steps;
-            const timer = setInterval(function() {
-                current = Math.min(current + increment, target);
-                el.innerText = Math.floor(current);
-                if (current >= target) {
-                    el.innerText = target;
-                    clearInterval(timer);
-                }
-            }, interval);
-        });
-    }
-    // Wait for DOM then run
-    setTimeout(runCounters, 120);
-    new MutationObserver(function() { setTimeout(runCounters, 80); })
-        .observe(window.parent.document.body, { childList: true, subtree: true });
-})();
-</script>
-""", height=0)
+    # counter animation JS removed (components.html deprecated)
 
     # ── Active Only filter toggle ──────────────────────────────────────────────
     def _carrier_badge(status: str) -> str:
@@ -1804,8 +1747,37 @@ if rows:
         if s == "INACTIVE":          return "🟡 Inactive"
         return "⚫ —"
 
+    # ── Pie chart: status distribution ────────────────────────────────────────
+    status_counts = results_df["Carrier_Status"].str.upper().value_counts().reset_index()
+    status_counts.columns = ["Status", "Count"]
+    color_map = {"ACTIVE": "#22c55e", "INACTIVE": "#f59e0b", "OUT_OF_SERVICE": "#ef4444", "UNKNOWN": "#94a3b8"}
+    pie_fig = px.pie(
+        status_counts, names="Status", values="Count",
+        color="Status", color_discrete_map=color_map,
+        title="Carrier Status Distribution",
+        hole=0.45,
+    )
+    pie_fig.update_traces(textposition="inside", textinfo="percent+label")
+    pie_fig.update_layout(
+        margin=dict(t=40, b=0, l=0, r=0),
+        height=280,
+        showlegend=False,
+        title_font_size=13,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#f1f5f9",
+    )
+    pie_col, _ = st.columns([2, 3])
+    pie_col.plotly_chart(pie_fig, use_container_width=True)
+
+    # ── Status filter ──────────────────────────────────────────────────────────
     f_col, _ = st.columns([3, 5])
-    show_active_only = f_col.toggle("🟢 Show Active Carriers Only", value=False)
+    status_filter = f_col.selectbox(
+        "Filter by status",
+        ["ALL", "ACTIVE", "INACTIVE", "OUT_OF_SERVICE"],
+        index=0,
+        label_visibility="collapsed",
+    )
 
     # Build preview dataframe with badge column
     preview_cols = [
@@ -1819,12 +1791,12 @@ if rows:
     preview_df.insert(2, "Status_Badge",
                       preview_df["Carrier_Status"].apply(_carrier_badge))
 
-    if show_active_only:
-        preview_df = preview_df[preview_df["Carrier_Status"].str.upper() == "ACTIVE"]
-        st.caption(f"Showing {len(preview_df)} active carriers out of {len(results_df)} total.")
+    if status_filter != "ALL":
+        preview_df = preview_df[preview_df["Carrier_Status"].str.upper() == status_filter]
+        st.caption(f"Showing {len(preview_df)} {status_filter} carriers out of {len(results_df)} total.")
 
     st.dataframe(
-        preview_df, use_container_width=True, height=360, hide_index=True,
+        preview_df, width="stretch", height=360, hide_index=True,
         column_config={
             "Input_ID":       st.column_config.TextColumn("Input ID",      width="small"),
             "Scrape_Status":  st.column_config.TextColumn("Scrape Status", width="small"),
@@ -1849,7 +1821,7 @@ if rows:
         with st.expander(f"⚠️  {len(failed_df)} records need attention"):
             st.dataframe(
                 failed_df[["Input_ID", "Scrape_Status", "Error_Detail"]],
-                use_container_width=True, height=200, hide_index=True,
+                width="stretch", height=200, hide_index=True,
             )
 
     # ── Action buttons ────────────────────────────────────────────────────────
