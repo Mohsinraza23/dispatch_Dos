@@ -592,6 +592,34 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
     40%  { box-shadow: 0 0 28px 8px rgba(16,185,129,0.28); }
     100% { box-shadow: 0 0 0  0   rgba(16,185,129,0); }
 }
+/* Summary pills inside banner */
+.sum-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 14px; border-radius: 99px;
+    font-size: .78rem; font-weight: 700; white-space: nowrap;
+}
+.sum-pill-active { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.sum-pill-oos    { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+.sum-pill-inactive { background: #fef9c3; color: #92400e; border: 1px solid #fde68a; }
+.sum-pill-notfound { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+.sum-pill-rate   { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.sum-pill-time   { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+.sum-banner {
+    background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
+    border: 1px solid #6ee7b7;
+    border-radius: 16px;
+    padding: 18px 24px;
+    margin-bottom: 20px;
+    animation: fadeInUp 0.4s ease both, successGlow 1.8s ease 0.4s both;
+}
+.sum-banner-top {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 800; color: #065f46; font-size: 1rem;
+    margin-bottom: 12px;
+}
+.sum-banner-pills {
+    display: flex; flex-wrap: wrap; gap: 8px;
+}
 .success-banner {
     background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
     border: 1px solid #6ee7b7;
@@ -723,6 +751,8 @@ def _init() -> None:
         "show_list_panel": False,  # left slide-in panel visibility
         # ETA tracking
         "scrape_start_time": None,
+        "scrape_elapsed":    None,  # total seconds when run finished
+        "_toast_shown":      False, # show completion toast only once
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -1220,6 +1250,9 @@ def _drain_queues() -> None:
     thread = st.session_state.scrape_thread
     if thread and not thread.is_alive():
         st.session_state.is_scraping = False
+        # Compute and save total elapsed time
+        if st.session_state.scrape_start_time and st.session_state.scrape_elapsed is None:
+            st.session_state.scrape_elapsed = time.time() - st.session_state.scrape_start_time
         rows = st.session_state.result_store
         if rows:
             settings = st.session_state.get("_settings", {})
@@ -1607,9 +1640,11 @@ if st.session_state.carrier_ids:
             st.session_state.last_id      = ""
             st.session_state.counts       = {"success": 0, "not_found": 0,
                                               "failed": 0, "blocked": 0}
-            st.session_state.results_rows = []
-            st.session_state.output_bytes = None
-            st.session_state._settings    = _current_settings
+            st.session_state.results_rows  = []
+            st.session_state.output_bytes  = None
+            st.session_state._settings     = _current_settings
+            st.session_state.scrape_elapsed = None
+            st.session_state["_toast_shown"] = False
 
             # Apply range-search optimisations BEFORE thread starts (avoids race condition)
             if st.session_state.get("_range_search", False):
@@ -1718,12 +1753,45 @@ if rows:
     results_df = pd.DataFrame(rows, columns=OUTPUT_COLS)
     counts     = st.session_state.counts
 
-    # 7. Success animation banner
+    # ── Toast notification (shows only once per run) ───────────────────────────
+    if not st.session_state.get("_toast_shown", False):
+        st.session_state["_toast_shown"] = True
+        st.toast(
+            f"✅ Done! {counts['success']} carriers found out of {len(results_df)} processed.",
+            icon="🚛",
+        )
+
+    # ── Compute summary numbers ────────────────────────────────────────────────
+    status_series  = results_df["Carrier_Status"].str.upper()
+    n_active       = int((status_series == "ACTIVE").sum())
+    n_oos          = int((status_series == "OUT_OF_SERVICE").sum())
+    n_inactive     = int((status_series == "INACTIVE").sum())
+    n_total        = len(results_df)
+    n_success      = counts["success"]
+    n_not_found    = counts["not_found"]
+    success_rate   = round(n_success / n_total * 100, 1) if n_total else 0
+
+    elapsed_sec = st.session_state.get("scrape_elapsed")
+    if elapsed_sec:
+        elapsed_min = int(elapsed_sec // 60)
+        elapsed_s   = int(elapsed_sec % 60)
+        time_str    = f"{elapsed_min}m {elapsed_s}s" if elapsed_min else f"{elapsed_s}s"
+    else:
+        time_str = ""
+
+    # ── Rich summary banner ────────────────────────────────────────────────────
+    pills_html = (
+        f'<span class="sum-pill sum-pill-rate">📊 {success_rate}% success rate</span>'
+        f'<span class="sum-pill sum-pill-active">🟢 {n_active} Active</span>'
+        f'<span class="sum-pill sum-pill-oos">🔴 {n_oos} Out of Service</span>'
+        f'<span class="sum-pill sum-pill-inactive">🟡 {n_inactive} Inactive</span>'
+        f'<span class="sum-pill sum-pill-notfound">⚫ {n_not_found} Not Found</span>'
+        + (f'<span class="sum-pill sum-pill-time">⏱ {time_str}</span>' if time_str else "")
+    )
     st.markdown(
-        f'<div class="success-banner">'
-        f'<span class="s-icon">✅</span>'
-        f'<span>Scraping complete!</span>'
-        f'<span class="s-count">{counts["success"]} carriers found</span>'
+        f'<div class="sum-banner">'
+        f'  <div class="sum-banner-top">✅ Scraping Complete — {n_success} carriers found out of {n_total}</div>'
+        f'  <div class="sum-banner-pills">{pills_html}</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -1795,8 +1863,21 @@ if rows:
         preview_df = preview_df[preview_df["Carrier_Status"].str.upper() == status_filter]
         st.caption(f"Showing {len(preview_df)} {status_filter} carriers out of {len(results_df)} total.")
 
+    # Row color coding based on carrier status
+    def _style_row(row: pd.Series):
+        s = str(row.get("Carrier_Status", "")).upper()
+        if s == "ACTIVE":
+            return ["background-color:#dcfce7; color:#15803d"] * len(row)
+        if s == "OUT_OF_SERVICE":
+            return ["background-color:#fee2e2; color:#b91c1c"] * len(row)
+        if s == "INACTIVE":
+            return ["background-color:#fef9c3; color:#92400e"] * len(row)
+        return [""] * len(row)
+
+    styled_df = preview_df.style.apply(_style_row, axis=1)
+
     st.dataframe(
-        preview_df, width="stretch", height=360, hide_index=True,
+        styled_df, width="stretch", height=360, hide_index=True,
         column_config={
             "Input_ID":       st.column_config.TextColumn("Input ID",      width="small"),
             "Scrape_Status":  st.column_config.TextColumn("Scrape Status", width="small"),
