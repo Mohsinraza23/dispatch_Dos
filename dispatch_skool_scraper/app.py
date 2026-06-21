@@ -763,6 +763,61 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 }
 .sw-done  .step-sub { color: #93c5fd; }
 .sw-active .step-sub { color: #3b82f6; }
+
+/* ══════════════════════════════════════════════════════
+   10. HOW-TO GUIDE CARDS
+══════════════════════════════════════════════════════ */
+.howto-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    margin: 0 0 24px;
+    animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.12s both;
+}
+.howto-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 18px 16px 16px;
+    position: relative;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.howto-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(37,99,235,0.1);
+    border-color: #bfdbfe;
+}
+.howto-num {
+    position: absolute; top: -12px; left: 16px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    color: #fff; font-size: .78rem; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(37,99,235,0.35);
+}
+.howto-icon { font-size: 1.5rem; margin-bottom: 8px; display: block; }
+.howto-title {
+    font-size: .88rem; font-weight: 700; color: #0f172a;
+    margin-bottom: 5px;
+}
+.howto-desc {
+    font-size: .75rem; color: #64748b; line-height: 1.55;
+}
+.howto-tip {
+    margin-top: 16px;
+    background: #eff6ff; border-left: 3px solid #2563eb;
+    border-radius: 0 8px 8px 0; padding: 10px 14px;
+    animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.18s both;
+}
+.howto-tip-title {
+    font-size: .72rem; font-weight: 700; color: #1d4ed8;
+    text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px;
+}
+.howto-tip ul {
+    margin: 0; padding-left: 16px;
+    font-size: .76rem; color: #1e40af; line-height: 1.7;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1546,20 +1601,61 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Quick-start instructions ──────────────────────────────────────────────────
-with st.expander("📖 How to use this tool", expanded=False):
-    st.markdown("""
-**Step 1** — Upload an Excel file or paste MC/DOT numbers below.
-**Step 2** — Review the dedup stats and preview your list.
-**Step 3** — Click **▶ Start Scraping**. The tool scrapes FMCSA one carrier at a time.
-**Step 4** — Watch live progress. Hit **⏹ Stop** anytime — partial results are saved.
-**Step 5** — Download the Excel report with all scraped data.
+# ── How-to Guide Cards ────────────────────────────────────────────────────────
+st.markdown("""
+<div class="howto-grid">
 
-**Tips:**
-- Numbers can be plain digits (`1597181`) or prefixed (`MC193369`). Both work.
-- The tool auto-detects USDOT vs MC and retries with the other type if not found.
-- Delay is **12–25 seconds** between requests (configurable in sidebar). Be patient!
-- Use the **Playwright fallback** (sidebar) if you see many "Blocked" results.
+  <div class="howto-card">
+    <div class="howto-num">1</div>
+    <span class="howto-icon">📋</span>
+    <div class="howto-title">Load Carrier List</div>
+    <div class="howto-desc">
+      Paste MC or USDOT numbers — one per line, or comma separated.
+      Or upload an <b>Excel / CSV</b> file directly.
+    </div>
+  </div>
+
+  <div class="howto-card">
+    <div class="howto-num">2</div>
+    <span class="howto-icon">🔍</span>
+    <div class="howto-title">Preview & Dedup</div>
+    <div class="howto-desc">
+      Tool auto-removes duplicates and shows a preview.
+      Review your list before scraping starts.
+    </div>
+  </div>
+
+  <div class="howto-card">
+    <div class="howto-num">3</div>
+    <span class="howto-icon">🚀</span>
+    <div class="howto-title">Start Scraping</div>
+    <div class="howto-desc">
+      Click <b>▶ Start Scraping</b>. Watch live logs.
+      Hit <b>⏹ Stop</b> anytime — partial results are always saved.
+    </div>
+  </div>
+
+  <div class="howto-card">
+    <div class="howto-num">4</div>
+    <span class="howto-icon">📥</span>
+    <div class="howto-title">Download Report</div>
+    <div class="howto-desc">
+      Get a full <b>Excel report</b> (4 sheets) + Active Only <b>CSV</b>.
+      Filter by status before downloading.
+    </div>
+  </div>
+
+</div>
+
+<div class="howto-tip">
+  <div class="howto-tip-title">💡 Pro Tips</div>
+  <ul>
+    <li>Plain numbers (<code>1597181</code>) or prefixed (<code>MC193369</code>) — both work</li>
+    <li>Tool auto-detects USDOT vs MC and retries if not found</li>
+    <li>Add a free FMCSA API key (sidebar) to bypass IP blocking completely</li>
+    <li>Enable <b>Browser Fallback</b> in sidebar if you see many Blocked results</li>
+  </ul>
+</div>
 """)
 
 
