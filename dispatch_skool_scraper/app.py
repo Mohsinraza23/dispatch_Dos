@@ -818,6 +818,35 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
     margin: 0; padding-left: 16px;
     font-size: .76rem; color: #1e40af; line-height: 1.7;
 }
+
+/* ══════════════════════════════════════════════════════
+   11. LIVE ID COUNTER
+══════════════════════════════════════════════════════ */
+.id-counter-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+}
+.id-counter-label {
+    font-size: .78rem; font-weight: 600; color: #64748b;
+}
+.id-counter-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 99px;
+    font-size: .75rem; font-weight: 700;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff; color: #1d4ed8;
+    transition: all 0.25s ease;
+}
+.id-counter-badge.has-ids {
+    background: #dcfce7; color: #15803d; border-color: #86efac;
+}
+.id-counter-badge.empty {
+    background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0;
+}
+.id-counter-dupe {
+    font-size: .7rem; color: #d97706; font-weight: 600;
+    margin-left: 6px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1730,16 +1759,57 @@ with tab_enter:
     st.markdown("<div style='margin-top:0.5rem'></div>", unsafe_allow_html=True)
 
     if input_mode == "✏️ Paste Numbers":
+        # ── Live ID counter (reads textarea value from session state) ──────────
+        _raw_paste = st.session_state.get("paste_area", "") or ""
+        _live_ids  = [v.strip() for v in re.split(r"[\n,;\t]+", _raw_paste)
+                      if v.strip() and len(v.strip()) > 1]
+        _live_count = len(_live_ids)
+        _live_dupes = _live_count - len(set(v.upper() for v in _live_ids))
+
+        if _live_count == 0:
+            _badge_cls  = "empty"
+            _badge_text = "📋 Paste IDs below"
+        else:
+            _badge_cls  = "has-ids"
+            _badge_text = f"✓ {_live_count} IDs detected"
+        _dupe_html = (
+            f'<span class="id-counter-dupe">· {_live_dupes} duplicate{"s" if _live_dupes != 1 else ""}</span>'
+            if _live_dupes > 0 else ""
+        )
+
         st.markdown(
-            '<div class="info-box">One entry per line — or comma/semicolon separated. '
-            'Accepts plain numbers, MC prefix, DOT prefix.</div>',
+            f'<div class="id-counter-row">'
+            f'  <span class="id-counter-label">Carrier IDs</span>'
+            f'  <span>'
+            f'    <span class="id-counter-badge {_badge_cls}">{_badge_text}</span>'
+            f'    {_dupe_html}'
+            f'  </span>'
+            f'</div>',
             unsafe_allow_html=True,
         )
+
         pasted = st.text_area(
             "Paste carrier IDs", height=200,
             placeholder="MC193369\n1597181\n793594\nMC123456, MC789012\n...",
             label_visibility="collapsed", key="paste_area",
         )
+
+        if _live_count > 0:
+            st.markdown(
+                f'<div class="info-box" style="margin-top:6px;">'
+                f'One entry per line · comma/semicolon/tab separated · '
+                f'<b>{_live_count} IDs ready</b>'
+                + (f' · <span style="color:#d97706">{_live_dupes} duplicate{"s" if _live_dupes!=1 else ""} will be removed</span>' if _live_dupes else "")
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div class="info-box">One entry per line — or comma/semicolon separated. '
+                'Accepts plain numbers, MC prefix, DOT prefix.</div>',
+                unsafe_allow_html=True,
+            )
+
         if st.button("Process List", type="primary", key="btn_paste"):
             if not pasted.strip():
                 st.warning("Please paste at least one carrier ID.")
