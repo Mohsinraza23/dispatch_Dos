@@ -692,6 +692,77 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 .stat-card .sc-sub {
     font-size: .72rem; color: #64748b; margin-top: 2px;
 }
+
+/* ══════════════════════════════════════════════════════
+   9. VISUAL STEP STEPPER
+══════════════════════════════════════════════════════ */
+.stepper {
+    display: flex; align-items: flex-start; gap: 0;
+    margin: 0 0 28px;
+    animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.15s both;
+}
+.step-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    flex: 1; position: relative;
+}
+/* connector line between steps */
+.step-wrap:not(:last-child)::after {
+    content: "";
+    position: absolute; top: 20px; left: calc(50% + 20px);
+    right: calc(-50% + 20px);
+    height: 2px;
+    background: #e2e8f0;
+    z-index: 0;
+    transition: background 0.4s ease;
+}
+.step-wrap.sw-done:not(:last-child)::after,
+.step-wrap.sw-active:not(:last-child)::after {
+    background: linear-gradient(90deg, #2563eb, #e2e8f0);
+}
+.step-wrap.sw-done:not(:last-child)::after {
+    background: #2563eb;
+}
+/* circle */
+.step-circle {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .9rem; font-weight: 800;
+    border: 2px solid #e2e8f0;
+    background: #f8fafc; color: #94a3b8;
+    position: relative; z-index: 1;
+    transition: all 0.3s ease;
+}
+.sw-done .step-circle {
+    background: #2563eb; border-color: #2563eb;
+    color: #fff;
+    box-shadow: 0 0 0 4px rgba(37,99,235,0.15);
+}
+.sw-active .step-circle {
+    background: #fff; border-color: #2563eb;
+    color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37,99,235,0.18);
+    animation: stepPulse 2s ease infinite;
+}
+@keyframes stepPulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(37,99,235,0.18); }
+    50%       { box-shadow: 0 0 0 8px rgba(37,99,235,0.08); }
+}
+/* labels */
+.step-label {
+    margin-top: 8px; font-size: .72rem; font-weight: 700;
+    color: #94a3b8; text-align: center; letter-spacing: .2px;
+    transition: color 0.3s ease;
+}
+.sw-done  .step-label { color: #2563eb; }
+.sw-active .step-label { color: #1e40af; }
+.step-sub {
+    font-size: .63rem; color: #cbd5e1; text-align: center;
+    margin-top: 2px; font-weight: 500;
+    transition: color 0.3s ease;
+}
+.sw-done  .step-sub { color: #93c5fd; }
+.sw-active .step-sub { color: #3b82f6; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1490,6 +1561,53 @@ with st.expander("📖 How to use this tool", expanded=False):
 - Delay is **12–25 seconds** between requests (configurable in sidebar). Be patient!
 - Use the **Playwright fallback** (sidebar) if you see many "Blocked" results.
 """)
+
+
+# ── Visual Step Stepper ───────────────────────────────────────────────────────
+def _render_stepper() -> None:
+    has_ids     = bool(st.session_state.carrier_ids)
+    is_scraping = st.session_state.is_scraping
+    has_results = bool(st.session_state.results_rows)
+
+    if has_results:
+        active = 4
+    elif is_scraping:
+        active = 3
+    elif has_ids:
+        active = 2
+    else:
+        active = 1
+
+    steps = [
+        ("1", "Load List",  "Paste / Upload IDs"),
+        ("2", "Preview",    "Dedup & review"),
+        ("3", "Scraping",   "Live FMCSA fetch"),
+        ("4", "Download",   "Excel + CSV ready"),
+    ]
+
+    def _cls(n: int) -> str:
+        if n < active:  return "step-wrap sw-done"
+        if n == active: return "step-wrap sw-active"
+        return "step-wrap"
+
+    def _circle(n: int, label: str) -> str:
+        if n < active:
+            return '<div class="step-circle">✓</div>'
+        return f'<div class="step-circle">{label}</div>'
+
+    html = '<div class="stepper">'
+    for i, (num, lbl, sub) in enumerate(steps, 1):
+        html += (
+            f'<div class="{_cls(i)}">'
+            f'{_circle(i, num)}'
+            f'<div class="step-label">{lbl}</div>'
+            f'<div class="step-sub">{sub}</div>'
+            f'</div>'
+        )
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+_render_stepper()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
