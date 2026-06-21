@@ -847,6 +847,70 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
     font-size: .7rem; color: #d97706; font-weight: 600;
     margin-left: 6px;
 }
+
+/* ══════════════════════════════════════════════════════
+   12. FOOTER
+══════════════════════════════════════════════════════ */
+.site-footer {
+    margin-top: 16px;
+    background: #0f172a;
+    border-radius: 16px;
+    padding: 28px 32px 22px;
+    animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
+}
+.footer-top {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    margin-bottom: 16px;
+}
+.footer-brand {
+    display: flex; align-items: center; gap: 10px;
+}
+.footer-brand-name {
+    font-size: 1rem; font-weight: 800; color: #f1f5f9;
+    letter-spacing: -0.02em;
+}
+.footer-brand-tag {
+    font-size: .7rem; color: #475569; font-weight: 500;
+    margin-top: 1px;
+}
+.footer-links {
+    display: flex; gap: 8px; flex-wrap: wrap;
+}
+.footer-link {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 14px; border-radius: 8px;
+    font-size: .75rem; font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #94a3b8 !important;
+    text-decoration: none !important;
+    transition: all 0.2s ease;
+    background: rgba(255,255,255,0.03);
+}
+.footer-link:hover {
+    background: rgba(37,99,235,0.2);
+    border-color: rgba(37,99,235,0.4);
+    color: #93c5fd !important;
+}
+.footer-bottom {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+}
+.footer-copy {
+    font-size: .7rem; color: #334155;
+}
+.footer-badges {
+    display: flex; gap: 6px;
+}
+.footer-badge {
+    font-size: .65rem; font-weight: 700; padding: 3px 10px;
+    border-radius: 99px; letter-spacing: .5px;
+}
+.fb-public  { background: rgba(34,197,94,0.12);  color: #4ade80;  border: 1px solid rgba(34,197,94,0.2);  }
+.fb-free    { background: rgba(37,99,235,0.12);  color: #60a5fa;  border: 1px solid rgba(37,99,235,0.2);  }
+.fb-secure  { background: rgba(124,58,237,0.12); color: #a78bfa;  border: 1px solid rgba(124,58,237,0.2); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -2351,10 +2415,39 @@ if rows:
 # ─────────────────────────────────────────────────────────────────────────────
 # FOOTER
 # ─────────────────────────────────────────────────────────────────────────────
-st.markdown('<hr class="div">', unsafe_allow_html=True)
-st.markdown(
-    '<div style="text-align:center;font-size:.75rem;color:#94a3b8;padding:8px 0 24px">'
-    '© Dispatch DOS · FMCSA Bulk Scraper'
-    '</div>',
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<div class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <span style="font-size:1.6rem">🚛</span>
+      <div>
+        <div class="footer-brand-name">Dispatch DOS</div>
+        <div class="footer-brand-tag">FMCSA Bulk Carrier Lookup Tool</div>
+      </div>
+    </div>
+    <div class="footer-links">
+      <a class="footer-link"
+         href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx"
+         target="_blank">🔗 FMCSA Website</a>
+      <a class="footer-link"
+         href="https://li.fmcsa.dot.gov/liview/pkg_web_key.pkg_add_update_webkey?pv_action=REGWEBKEY"
+         target="_blank">🔑 Get Free API Key</a>
+      <a class="footer-link"
+         href="https://github.com/Mohsinraza23/dispatch_Dos"
+         target="_blank">⭐ GitHub</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-copy">
+      © 2026 Dispatch DOS · Data sourced from
+      <code style="color:#475569;font-size:.68rem">safer.fmcsa.dot.gov</code>
+      · Public government records
+    </div>
+    <div class="footer-badges">
+      <span class="footer-badge fb-public">✓ Public Data</span>
+      <span class="footer-badge fb-free">⚡ Free to Use</span>
+      <span class="footer-badge fb-secure">🔒 No Login</span>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
