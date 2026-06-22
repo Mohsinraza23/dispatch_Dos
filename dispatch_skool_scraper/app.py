@@ -1749,7 +1749,7 @@ st.markdown("""
     <li>Enable <b>Browser Fallback</b> in sidebar if you see many Blocked results</li>
   </ul>
 </div>
-""")
+""", unsafe_allow_html=True)
 
 
 # ── Visual Step Stepper ───────────────────────────────────────────────────────
