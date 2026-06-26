@@ -7,3 +7,6 @@ __pycache__/
 logs/
 checkpoint_*.json
 DispatchSkool_*.xlsx
+DispatchDOS_*.xlsx
+DispatchDOS_*.csv
+scrape_progress.json

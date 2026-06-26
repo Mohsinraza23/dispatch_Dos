@@ -20,6 +20,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import json
 import time
 import queue
 import subprocess
@@ -93,8 +94,10 @@ def _install_playwright() -> str:
         if pip_r.returncode != 0:
             return f"pip install failed: {pip_r.stderr[:200]}"
         # Use python -m playwright to avoid PATH issues with newly installed CLI
+        # Note: system deps (libnss3 etc.) are pre-installed via packages.txt
+        # so --with-deps is NOT used here (would fail on Streamlit Cloud)
         r = subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"],
+            [sys.executable, "-m", "playwright", "install", "chromium"],
             capture_output=True, text=True, timeout=300
         )
         return "ok" if r.returncode == 0 else r.stderr[:200]
@@ -1028,6 +1031,8 @@ def _init() -> None:
         "scrape_start_time": None,
         "scrape_elapsed":    None,  # total seconds when run finished
         "_toast_shown":      False, # show completion toast only once
+        # Resume support
+        "_resume_existing_rows": [],  # rows from previous partial run (for resume)
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -1210,12 +1215,15 @@ def _scraper_thread(
     prog_q: queue.Queue,
     result_store: list,
     stop_event: threading.Event,
+    _existing_rows: list | None = None,   # rows already done (resume support)
+    _dupes_list:    list | None = None,   # duplicates list (for progress save)
 ) -> None:
     """
     Runs in a daemon thread.
     Processes carriers concurrently (max_concurrent workers).
     Each worker has its own requests.Session.
     skip_type_retry=True skips MC fallback (used for range search).
+    Auto-saves progress to disk every 50 carriers for large jobs.
     """
     def _log(level: str, msg: str) -> None:
         log_q.put({
@@ -1224,10 +1232,13 @@ def _scraper_thread(
             "msg": msg,
         })
 
-    total     = len(carrier_ids)
+    total          = len(carrier_ids)
     flat_rows: list[dict[str, str] | None] = [None] * total
-    lock      = threading.Lock()
-    completed = [0]
+    lock           = threading.Lock()
+    completed      = [0]
+    processed_ids: set[str] = set()
+    _prev_rows     = _existing_rows or []
+    _dupes         = _dupes_list or []
 
     # ── Try Playwright (sync API) as primary engine ────────────────────────
     # Playwright acts like a real browser — bypasses FMCSA IP blocking
@@ -1332,6 +1343,15 @@ def _scraper_thread(
                 res = {"status": "error", "error_detail": str(exc),
                        "fetch_method": "playwright"}
 
+            # If not found as USDOT (plain digits), retry as MC — same as HTTP path
+            if res.get("status") == "not_found" and primary == "USDOT":
+                _log("warn", f"  Not found as USDOT → retrying as MC: {cid}")
+                try:
+                    res = _pw_scrape_one("MC" + cid)
+                except Exception as exc2:
+                    res = {"status": "error", "error_detail": str(exc2),
+                           "fetch_method": "playwright"}
+
             row           = _flatten(cid, res)
             scrape_status = row["Scrape_Status"]
 
@@ -1351,9 +1371,17 @@ def _scraper_thread(
                 flat_rows[i] = row
                 completed[0] += 1
                 done = completed[0]
+                processed_ids.add(cid)
 
             prog_q.put({"current": done, "total": total,
                         "cid": cid, "status": scrape_status})
+
+            # Auto-save progress every 50 carriers
+            if done % 50 == 0:
+                remaining   = [c for c in carrier_ids if c not in processed_ids]
+                done_so_far = _prev_rows + [r for r in flat_rows if r is not None]
+                _save_progress_to_disk(remaining, done_so_far, _dupes)
+                _log("info", f"💾 Progress saved ({done}/{total})")
 
         # Close browser when done
         try:
@@ -1458,9 +1486,17 @@ def _scraper_thread(
                 flat_rows[i] = row
                 completed[0] += 1
                 done = completed[0]
+                processed_ids.add(cid)
 
             prog_q.put({"current": done, "total": total,
                         "cid": cid, "status": scrape_status})
+
+            # Auto-save progress every 50 carriers
+            if done % 50 == 0:
+                remaining   = [c for c in carrier_ids if c not in processed_ids]
+                done_so_far = _prev_rows + [r for r in flat_rows if r is not None]
+                _save_progress_to_disk(remaining, done_so_far, _dupes)
+                _log("info", f"💾 Progress saved ({done}/{total})")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -1498,6 +1534,53 @@ def _render_log_line(entry: dict) -> str:
     return f'<span class="log-line"><span class="lt">{entry["t"]}</span><span class="{cls}">{msg}</span></span>'
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Disk-based progress save / resume  (for large 5000+ carrier jobs)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrape_progress.json")
+
+
+def _save_progress_to_disk(remaining_ids: list, completed_rows: list, dupes: list) -> None:
+    """Save current scraping progress to disk so it can be resumed later."""
+    try:
+        data = {
+            "saved_at":       datetime.now().isoformat(),
+            "remaining_ids":  remaining_ids,
+            "completed_rows": completed_rows,
+            "dupes":          dupes,
+            "done_count":     len(completed_rows),
+            "remaining_count": len(remaining_ids),
+        }
+        with open(_PROGRESS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, default=str)
+    except Exception:
+        pass  # progress save failure is non-fatal
+
+
+def _load_progress_from_disk() -> dict | None:
+    """Load saved progress file if it exists and is valid."""
+    if not os.path.exists(_PROGRESS_FILE):
+        return None
+    try:
+        with open(_PROGRESS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if data.get("remaining_ids") or data.get("completed_rows"):
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _clear_progress_file() -> None:
+    """Delete the progress file after a completed run."""
+    try:
+        if os.path.exists(_PROGRESS_FILE):
+            os.remove(_PROGRESS_FILE)
+    except Exception:
+        pass
+
+
 def _drain_queues() -> None:
     """Pull all pending queue items into session_state. Check thread liveness."""
     # Logs
@@ -1528,13 +1611,21 @@ def _drain_queues() -> None:
         # Compute and save total elapsed time
         if st.session_state.scrape_start_time and st.session_state.scrape_elapsed is None:
             st.session_state.scrape_elapsed = time.time() - st.session_state.scrape_start_time
-        rows = st.session_state.result_store
-        if rows:
+        new_rows  = st.session_state.result_store
+        # Merge with any rows that were completed in a previous partial run (resume)
+        prev_rows = st.session_state.get("_resume_existing_rows", [])
+        all_rows  = prev_rows + new_rows
+        if all_rows:
             settings = st.session_state.get("_settings", {})
             st.session_state.output_bytes = _build_excel(
-                rows, st.session_state.dupes_removed, settings
+                all_rows, st.session_state.dupes_removed, settings
             )
-            st.session_state.results_rows = rows
+            st.session_state.results_rows = all_rows
+        # Only clear progress file on natural completion — keep it if user pressed Stop
+        # so they can resume later from the last checkpoint.
+        _stop_ev = st.session_state.get("stop_event")
+        if not (_stop_ev and _stop_ev.is_set()):
+            _clear_progress_file()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1806,6 +1897,44 @@ _render_stepper()
 st.markdown('<div class="sec-head">📂 Step 1 — Load Carrier List</div>',
             unsafe_allow_html=True)
 
+# ── Resume banner — shown when a saved checkpoint exists ─────────────────────
+_saved_prog = _load_progress_from_disk()
+if _saved_prog and not st.session_state.is_scraping:
+    _done_c   = _saved_prog.get("done_count", 0)
+    _rem_c    = _saved_prog.get("remaining_count", 0)
+    _saved_at = _saved_prog.get("saved_at", "")[:16].replace("T", " ")
+    st.markdown(
+        f'<div class="warn-box" style="margin-bottom:14px;">'
+        f'<b>💾 Unfinished job found</b> — saved at {_saved_at} &nbsp;·&nbsp; '
+        f'<b>{_done_c}</b> done &nbsp;·&nbsp; <b>{_rem_c}</b> remaining'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    _rb1, _rb2, _ = st.columns([2, 2, 4])
+    if _rb1.button("▶ Resume Previous Job", type="primary", key="btn_resume"):
+        _rem_ids  = _saved_prog.get("remaining_ids", [])
+        _prev_done = _saved_prog.get("completed_rows", [])
+        _prev_dupes = _saved_prog.get("dupes", [])
+        unique, _, _ = _process_input(_rem_ids)
+        st.session_state.carrier_ids           = unique
+        st.session_state.dupes_removed         = _prev_dupes
+        st.session_state.total_input           = _done_c + _rem_c
+        st.session_state.total_unique          = _done_c + len(unique)
+        st.session_state._resume_existing_rows = _prev_done
+        st.session_state.results_rows          = []
+        st.session_state.output_bytes          = None
+        st.session_state.counts                = {
+            "success":   sum(1 for r in _prev_done if r.get("Scrape_Status") == "Success"),
+            "not_found": sum(1 for r in _prev_done if r.get("Scrape_Status") == "Not_Found"),
+            "failed":    sum(1 for r in _prev_done if r.get("Scrape_Status") == "Failed"),
+            "blocked":   sum(1 for r in _prev_done if r.get("Scrape_Status") == "Blocked"),
+        }
+        st.session_state.log_lines = []
+        st.rerun()
+    if _rb2.button("Discard & Start Fresh", type="secondary", key="btn_discard"):
+        _clear_progress_file()
+        st.rerun()
+
 tab_enter, tab_upload = st.tabs(["📋 Enter Carriers", "📎 Upload Excel / CSV"])
 
 raw_ids_from_input: list[str] = []
@@ -1890,22 +2019,26 @@ with tab_enter:
         r1, r2 = st.columns(2)
         range_start = r1.number_input("Start Number", min_value=1, value=1000,
                                        step=1, key="range_start")
-        range_end   = r2.number_input("End Number",   min_value=1, value=1050,
+        range_end   = r2.number_input("End Number",   min_value=1, value=5000,
                                        step=1, key="range_end")
 
         range_count = int(range_end) - int(range_start) + 1
-        _MAX_RANGE  = 500
+        _MAX_RANGE  = 5000
 
         if range_end >= range_start:
             # Range search always uses 1 worker
             est_range_min = max(1, int(range_count * (delay_min + delay_max) / 2 / 60))
             est_range_max = max(1, int(range_count * delay_max / 60))
             if range_count <= _MAX_RANGE:
+                _est_hrs = est_range_max // 60
+                _est_rem = est_range_max % 60
+                _est_str = (f"~{_est_hrs}h {_est_rem}m" if _est_hrs else f"~{est_range_min}–{est_range_max} min")
                 st.markdown(
                     f'<div class="info-box">'
                     f'📦 <b>{range_count} numbers</b> will be generated '
                     f'({int(range_start)} → {int(range_end)}) &nbsp;·&nbsp; '
-                    f'⏱ Est. time: <b>~{est_range_min}–{est_range_max} min</b>'
+                    f'⏱ Est. time: <b>{_est_str}</b> &nbsp;·&nbsp; '
+                    f'💾 Auto-save every 50 carriers'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
@@ -1972,11 +2105,13 @@ if input_triggered and raw_ids_from_input:
     st.session_state.total_input    = total_in
     st.session_state.total_unique   = len(unique)
     # Reset any previous results
-    st.session_state.results_rows   = []
-    st.session_state.output_bytes   = None
-    st.session_state.counts         = {"success": 0, "not_found": 0,
-                                        "failed": 0, "blocked": 0}
-    st.session_state.log_lines      = []
+    st.session_state.results_rows        = []
+    st.session_state.output_bytes        = None
+    st.session_state.counts              = {"success": 0, "not_found": 0,
+                                            "failed": 0, "blocked": 0}
+    st.session_state.log_lines           = []
+    # New input = fresh run — clear resume state so old data doesn't bleed in
+    st.session_state._resume_existing_rows = []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2080,6 +2215,10 @@ if st.session_state.carrier_ids:
             st.session_state.scrape_elapsed = None
             st.session_state["_toast_shown"] = False
 
+            # Fresh run (not a resume) → clear any leftover progress file
+            if not st.session_state.get("_resume_existing_rows"):
+                _clear_progress_file()
+
             # Apply range-search optimisations BEFORE thread starts (avoids race condition)
             if st.session_state.get("_range_search", False):
                 _current_settings["skip_type_retry"] = True
@@ -2092,6 +2231,8 @@ if st.session_state.carrier_ids:
                     st.session_state.carrier_ids,
                     _current_settings,
                     lq, pq, rs, stop_ev,
+                    st.session_state.get("_resume_existing_rows", []),
+                    st.session_state.dupes_removed,
                 ),
                 daemon=True,
             )
@@ -2398,6 +2539,7 @@ if rows:
     if new_col.button("🆕  New Session", use_container_width=True, key="btn_new"):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
+        _clear_progress_file()
         st.rerun()
 
     # Excel sheet description

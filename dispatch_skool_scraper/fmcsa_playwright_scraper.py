@@ -143,16 +143,20 @@ def _extract_table_items(page: Page, summary: str) -> list[str]:
         return []
 
 
+_DATE_PAT = re.compile(r'\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}')
+
+
 def _derive_status(fields: dict[str, str]) -> str:
     """
     Derive ACTIVE / INACTIVE / OUT_OF_SERVICE from scraped fields.
-    Priority: OOS date present → OUT_OF_SERVICE
+    Priority: OOS date present (and looks like a real date) → OUT_OF_SERVICE
               auth status inactive/revoked → INACTIVE
               auth status says active → ACTIVE
               default → INACTIVE
     """
     oos = fields.get("oos_date", "").lower().strip()
-    if oos and oos not in ("", "none", "n/a", "-"):
+    # Must look like an actual date (MM/DD/YYYY), not just any non-empty text
+    if oos and oos not in ("", "none", "n/a", "-") and _DATE_PAT.search(oos):
         return "OUT_OF_SERVICE"
 
     auth = (fields.get("operating_authority_status", "") + " " +
@@ -170,17 +174,17 @@ def _derive_status(fields: dict[str, str]) -> str:
 # Core scrape function
 # ─────────────────────────────────────────────────────────────────────────────
 
-def scrape_usdot(page: Page, usdot: str, delay_min: float = 4.0,
+def scrape_usdot(page: Page, search_value: str, delay_min: float = 4.0,
                  delay_max: float = 9.0) -> dict[str, Any]:
     """
-    Scrape one carrier by USDOT number.
+    Scrape one carrier by USDOT or MC number.
 
     Parameters
     ----------
-    page       : Playwright Page object (reused across calls)
-    usdot      : USDOT number (digits only, or prefixed — prefix stripped)
-    delay_min  : min seconds to wait after page load
-    delay_max  : max seconds to wait after page load
+    page         : Playwright Page object (reused across calls)
+    search_value : USDOT number or MC number (prefix auto-detected & stripped)
+    delay_min    : min seconds to wait after page load
+    delay_max    : max seconds to wait after page load
 
     Returns
     -------
@@ -190,13 +194,19 @@ def scrape_usdot(page: Page, usdot: str, delay_min: float = 4.0,
     safety_rating, oos_date, entity_type, mc_number,
     carrier_status, scraped_at, error_detail
     """
-    # Clean the input — strip any MC/DOT prefix
-    usdot_clean = re.sub(r"^(USDOT|DOT)\s*[#\-\s]?", "", str(usdot),
-                         flags=re.IGNORECASE).strip()
+    # Detect search type from prefix — MC prefix → MC_MX query, else USDOT
+    raw = str(search_value).strip()
+    if re.match(r'^MC\s*[#\-]?\d', raw, re.IGNORECASE):
+        query_param  = "MC_MX"
+        search_clean = re.sub(r"^MC\s*[#\-\s]?", "", raw, flags=re.IGNORECASE).strip()
+    else:
+        query_param  = "USDOT"
+        search_clean = re.sub(r"^(USDOT|DOT)\s*[#\-\s]?", "", raw,
+                               flags=re.IGNORECASE).strip()
 
     result: dict[str, Any] = {
         "status":                    "error",
-        "usdot_input":               usdot,
+        "usdot_input":               search_value,
         "usdot_number":              "",
         "legal_name":                "",
         "dba_name":                  "",
@@ -226,8 +236,8 @@ def scrape_usdot(page: Page, usdot: str, delay_min: float = 4.0,
         f"{FMCSA_BASE}"
         f"?searchType=ANY"
         f"&query_type=queryCarrierSnapshot"
-        f"&query_param=USDOT"
-        f"&query_string={usdot_clean}"
+        f"&query_param={query_param}"
+        f"&query_string={search_clean}"
     )
 
     try:
