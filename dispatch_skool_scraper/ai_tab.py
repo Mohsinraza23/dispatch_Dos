@@ -336,12 +336,6 @@ def render_ai_tab(groq_key: str = "") -> None:
     <div class="sc-lbl">Languages</div>
     <div class="sc-sub">Text + Audio input</div>
   </div>
-  <div class="stat-card sc-orange">
-    <span class="sc-icon">⚡</span>
-    <div class="sc-val">Free</div>
-    <div class="sc-lbl">Groq Powered</div>
-    <div class="sc-sub">No cost, fast</div>
-  </div>
 </div>
 """, unsafe_allow_html=True)
 
