@@ -22,14 +22,27 @@ from bs4 import BeautifulSoup
 
 log = logging.getLogger("ai_scraper_engine")
 
-# ── Load .env file if present (local development) ─────────────────────────────
+# ── Load Groq API key — .env (local) or Streamlit Cloud secrets (production) ──
+import os as _os
+
 try:
     from dotenv import load_dotenv
-    import os as _os
     load_dotenv()
-    _ENV_GROQ_KEY = _os.environ.get("GROQ_API_KEY", "")
 except ImportError:
-    _ENV_GROQ_KEY = ""
+    pass
+
+_ENV_GROQ_KEY = _os.environ.get("GROQ_API_KEY", "")
+
+# Streamlit Cloud: secrets are in st.secrets, not always in os.environ
+if not _ENV_GROQ_KEY:
+    try:
+        import streamlit as _st
+        _ENV_GROQ_KEY = (
+            _st.secrets.get("GROQ_API_KEY", "")
+            or _st.secrets.get("groq_api_key", "")
+        )
+    except Exception:
+        pass
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Groq client helper
