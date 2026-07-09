@@ -15,6 +15,5 @@ libpango-1.0-0
 libcairo2
 libxss1
 libx11-xcb1
-libglib2.0-0
 libxshmfence1
 fonts-liberation
