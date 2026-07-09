@@ -2948,7 +2948,6 @@ with _tab_fmcsa:
         </div>
         <div class="footer-badges">
           <span class="footer-badge fb-public">✓ Public Data</span>
-          <span class="footer-badge fb-free">⚡ Free to Use</span>
           <span class="footer-badge fb-secure">🔒 No Login</span>
         </div>
       </div>
