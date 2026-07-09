@@ -2038,7 +2038,7 @@ with _tab_fmcsa:
     <div class="stats-bar">
       <div class="stat-card sc-blue">
         <span class="sc-icon">🚛</span>
-        <div class="sc-val">500+</div>
+        <div class="sc-val">5000+</div>
         <div class="sc-lbl">Carriers Per Run</div>
         <div class="sc-sub">Bulk scrape in one go</div>
       </div>
