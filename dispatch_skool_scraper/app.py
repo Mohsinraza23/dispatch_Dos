@@ -128,7 +128,17 @@ html, body, [class*="css"] {
     color: #0f172a !important;
 }
 .stApp { background: #f8fafc !important; }
-.block-container { padding-top: 1.5rem !important; max-width: 1280px; }
+.block-container {
+    padding-top: 1.5rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+    max-width: 1280px;
+}
+/* Push tabs bar away from sidebar edge */
+div[data-testid="stTabs"] {
+    margin-left: 0 !important;
+    padding-left: 4px !important;
+}
 
 /* ══════════════════════════════════════════════════════
    SIDEBAR — dark stays (contrast), hover to open
