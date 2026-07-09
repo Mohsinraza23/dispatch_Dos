@@ -128,16 +128,16 @@ html, body, [class*="css"] {
     color: #0f172a !important;
 }
 .stApp { background: #f8fafc !important; }
+/* Force main content to start after 64px sidebar */
+section[data-testid="stMain"] {
+    margin-left: 64px !important;
+    padding-left: 0 !important;
+}
 .block-container {
     padding-top: 1.5rem !important;
-    padding-left: 1.5rem !important;
-    padding-right: 1.5rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
     max-width: 1280px;
-}
-/* Push tabs bar away from sidebar edge */
-div[data-testid="stTabs"] {
-    margin-left: 0 !important;
-    padding-left: 4px !important;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -346,6 +346,7 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
 ══════════════════════════════════════════════════════ */
 /* Tab container — full width, dark pill bar */
 div[data-testid="stTabs"] {
+    margin-top: 1.5rem !important;
     margin-bottom: 20px !important;
 }
 .stTabs [data-baseweb="tab-list"] {
