@@ -334,24 +334,42 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
 /* ══════════════════════════════════════════════════════
    TABS
 ══════════════════════════════════════════════════════ */
+/* Tab container — full width, dark pill bar */
+div[data-testid="stTabs"] {
+    margin-bottom: 20px !important;
+}
 .stTabs [data-baseweb="tab-list"] {
-    gap: 2px; background: #f1f5f9;
-    padding: 4px; border-radius: 12px;
-    border: 1px solid #e2e8f0;
+    gap: 6px !important;
+    background: #0f172a !important;
+    padding: 6px 8px !important;
+    border-radius: 14px !important;
+    border: none !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
+    width: fit-content !important;
 }
 .stTabs [data-baseweb="tab"] {
-    border-radius: 8px !important; padding: 8px 20px !important;
-    font-weight: 600 !important; font-size: .88rem !important;
-    color: #64748b !important; transition: all 0.2s ease !important;
-    border: none !important; background: transparent !important;
+    border-radius: 10px !important;
+    padding: 10px 26px !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    color: #94a3b8 !important;
+    transition: all 0.2s ease !important;
+    border: none !important;
+    background: transparent !important;
+    letter-spacing: -0.01em !important;
 }
 .stTabs [data-baseweb="tab"]:hover {
-    color: #1d4ed8 !important; background: #eff6ff !important;
+    color: #ffffff !important;
+    background: rgba(255,255,255,0.08) !important;
 }
 .stTabs [aria-selected="true"] {
-    background: #ffffff !important; color: #1d4ed8 !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
+    background: #2563eb !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 12px rgba(37,99,235,0.4) !important;
 }
+/* Hide the bottom underline Streamlit adds */
+.stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+.stTabs [data-baseweb="tab-border"]    { display: none !important; }
 
 /* ══════════════════════════════════════════════════════
    EXPANDER
