@@ -42,6 +42,7 @@ from fmcsa_scraper import (
     DEFAULT_DELAY_MIN,
     DEFAULT_DELAY_MAX,
 )
+from ai_tab import render_ai_tab, render_ai_sidebar
 
 _FMCSA_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -919,6 +920,244 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Feature — Carrier Risk Scorecard + Authority Flags + PDF Report
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _compute_risk_score(row: dict) -> tuple[int, str]:
+    """
+    Score a carrier 0-100 based on scraped FMCSA data.
+    Returns (score, level) where level = 'safe' | 'caution' | 'high_risk'.
+    """
+    score = 50  # neutral start
+
+    # Safety Rating (±30) — highest weight
+    rating = str(row.get("Safety_Rating", "")).lower()
+    if "satisfactory" in rating and "un" not in rating:
+        score += 30
+    elif "unsatisfactory" in rating:
+        score -= 30
+
+    # Carrier Status (±35)
+    status = str(row.get("Carrier_Status", "")).upper()
+    if status == "ACTIVE":
+        score += 20
+    elif status == "OUT_OF_SERVICE":
+        score -= 35
+    elif status == "INACTIVE":
+        score -= 20
+
+    # Authority Status (±25)
+    auth = str(row.get("Operating_Authority_Status", "")).lower()
+    if "active" in auth:
+        score += 15
+    elif "revoked" in auth or "suspended" in auth:
+        score -= 25
+
+    # OOS Percentage (±15)
+    try:
+        oos_raw = str(row.get("OOS_Percentage", "") or "").replace("%", "").strip()
+        oos = float(oos_raw) if oos_raw else 0.0
+        if oos == 0:
+            score += 10
+        elif oos < 15:
+            score += 5
+        elif oos > 35:
+            score -= 15
+        elif oos > 20:
+            score -= 8
+    except (ValueError, TypeError):
+        pass
+
+    # Total Crashes (±10)
+    try:
+        crashes_raw = str(row.get("Total_Crashes", "") or "").strip()
+        crashes = int(crashes_raw) if crashes_raw.isdigit() else 0
+        if crashes == 0:
+            score += 5
+        elif crashes <= 2:
+            score -= 5
+        else:
+            score -= min(crashes * 3, 15)
+    except (ValueError, TypeError):
+        pass
+
+    score = max(0, min(100, score))
+    level = "safe" if score >= 70 else ("caution" if score >= 45 else "high_risk")
+    return score, level
+
+
+def _risk_badge(score: int, level: str) -> str:
+    if level == "safe":       return f"🟢 Safe ({score})"
+    if level == "caution":    return f"🟡 Caution ({score})"
+    return f"🔴 High Risk ({score})"
+
+
+def _authority_flags(row: dict) -> str:
+    """Return plain-text alert flags for dangerous carriers."""
+    auth   = str(row.get("Operating_Authority_Status", "")).lower()
+    status = str(row.get("Carrier_Status", "")).upper()
+    flags  = []
+    if "revoked"       in auth:  flags.append("AUTH REVOKED")
+    if "suspended"     in auth:  flags.append("SUSPENDED")
+    if status == "OUT_OF_SERVICE": flags.append("OUT OF SERVICE")
+    return " | ".join(flags) if flags else "Clear"
+
+
+def _generate_pdf_report(rows: list[dict]) -> bytes:
+    """
+    Generate a professional multi-carrier PDF report (one page per carrier).
+    Requires fpdf2. Returns PDF bytes or empty bytes if fpdf2 not installed.
+    """
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return b""
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    found_rows = [r for r in rows
+                  if str(r.get("Scrape_Status", "")).lower() in ("found", "success")]
+    if not found_rows:
+        return b""
+
+    for row in found_rows:
+        pdf.add_page()
+
+        # Header bar
+        pdf.set_fill_color(29, 78, 216)
+        pdf.rect(0, 0, 210, 22, style="F")
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_xy(10, 5)
+        pdf.cell(190, 12, "DISPATCH DOS  -  Carrier Verification Report", align="C")
+
+        # Carrier name
+        pdf.set_text_color(15, 23, 42)
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.set_xy(10, 28)
+        name = str(row.get("Legal_Name", "-"))[:60]
+        pdf.cell(130, 8, name)
+
+        # Risk score box (top-right)
+        score, level = _compute_risk_score(row)
+        risk_colors  = {"safe": (34, 197, 94), "caution": (245, 158, 11), "high_risk": (239, 68, 68)}
+        risk_labels  = {"safe": "SAFE", "caution": "CAUTION", "high_risk": "HIGH RISK"}
+        r, g, b = risk_colors[level]
+        pdf.set_fill_color(r, g, b)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_xy(148, 26)
+        pdf.cell(52, 10, f"Risk: {risk_labels[level]}  ({score}/100)", align="C", fill=True)
+
+        # DBA name
+        dba = str(row.get("DBA_Name", "")).strip()
+        if dba:
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_text_color(100, 116, 139)
+            pdf.set_xy(10, 36)
+            pdf.cell(130, 6, f"DBA: {dba[:50]}")
+
+        # Authority flags bar
+        flags_text = _authority_flags(row)
+        flag_ok = (flags_text == "Clear")
+        pdf.set_fill_color(220, 252, 231) if flag_ok else pdf.set_fill_color(254, 226, 226)
+        pdf.set_text_color(21, 128, 61)   if flag_ok else pdf.set_text_color(185, 28, 28)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_xy(10, 44)
+        label = ("Authority & Status: OK - No Issues Found"
+                 if flag_ok else f"ALERT: {flags_text}")
+        pdf.cell(190, 7, label, fill=True)
+
+        # Divider
+        pdf.set_draw_color(226, 232, 240)
+        pdf.line(10, 53, 200, 53)
+
+        # Two-column data fields
+        fields_left = [
+            ("USDOT #",       row.get("USDOT_Number",  "-")),
+            ("MC #",          row.get("MC_Number",      "-")),
+            ("Status",        row.get("Carrier_Status", "-")),
+            ("Authority",     row.get("Operating_Authority_Status", "-")),
+            ("Safety Rating", row.get("Safety_Rating",  "-")),
+            ("Entity Type",   row.get("Entity_Type",    "-")),
+            ("Phone",         row.get("Phone",          "-")),
+        ]
+        fields_right = [
+            ("Power Units",   row.get("Power_Units",     "-")),
+            ("Drivers",       row.get("Drivers",         "-")),
+            ("OOS %",         row.get("OOS_Percentage",  "-")),
+            ("Total Crashes", row.get("Total_Crashes",   "-")),
+            ("Vehicle OOS",   row.get("Vehicle_OOS_Pct", "-")),
+            ("Driver OOS",    row.get("Driver_OOS_Pct",  "-")),
+            ("MCS-150 Date",  row.get("MCS150_Date",     "-")),
+        ]
+
+        y0 = 57
+        for i, (label, value) in enumerate(fields_left):
+            y = y0 + i * 9
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.set_text_color(71, 85, 105)
+            pdf.set_xy(10, y)
+            pdf.cell(32, 7, label + ":")
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(15, 23, 42)
+            pdf.cell(63, 7, str(value)[:35])
+
+        for i, (label, value) in enumerate(fields_right):
+            y = y0 + i * 9
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.set_text_color(71, 85, 105)
+            pdf.set_xy(110, y)
+            pdf.cell(32, 7, label + ":")
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(15, 23, 42)
+            pdf.cell(58, 7, str(value)[:30])
+
+        # Address
+        pdf.set_draw_color(226, 232, 240)
+        pdf.line(10, 124, 200, 124)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(71, 85, 105)
+        pdf.set_xy(10, 127)
+        pdf.cell(32, 6, "Address:")
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(158, 6, str(row.get("Physical_Address", "-"))[:80])
+
+        # Cargo
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(71, 85, 105)
+        pdf.set_xy(10, 136)
+        pdf.cell(32, 6, "Cargo:")
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(158, 6, str(row.get("Cargo_Carried", "-"))[:90])
+
+        # Operations
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(71, 85, 105)
+        pdf.set_xy(10, 144)
+        pdf.cell(32, 6, "Operations:")
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(158, 6, str(row.get("Operation_Classification", "-"))[:90])
+
+        # Page footer
+        pdf.set_fill_color(248, 250, 252)
+        pdf.rect(0, 282, 210, 15, style="F")
+        pdf.set_text_color(148, 163, 184)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_xy(10, 286)
+        pdf.cell(95, 5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}  |  Dispatch DOS")
+        pdf.set_xy(105, 286)
+        pdf.cell(95, 5, "Data source: safer.fmcsa.dot.gov  |  Public government records", align="R")
+
+    output = pdf.output()
+    return bytes(output) if not isinstance(output, bytes) else output
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Output column definitions
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1716,6 +1955,9 @@ with st.sidebar:
         )
 
     st.markdown("---")
+    render_ai_sidebar()
+
+    st.markdown("---")
     st.markdown('<div class="sb-lbl">ℹ️ About</div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:.76rem;color:#64748b;line-height:1.6">'
@@ -1742,854 +1984,944 @@ _current_settings: dict[str, Any] = {
 # ── MAIN CONTENT ─────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Banner ────────────────────────────────────────────────────────────────────
-st.markdown(
-    '<div class="ds-header">'
-    '<span style="font-size:3rem">🚛</span>'
-    '<div>'
-    '<h1>FMCSA Bulk Carrier Lookup</h1>'
-    '<p>Upload carrier list → deduplicate → scrape FMCSA → download enriched Excel</p>'
-    '</div>'
-    '<span class="ds-badge">Dispatch DOS</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
+# ── Tabs ────────────────────────────────────────────────────────────────────────
+_tab_fmcsa, _tab_ai = st.tabs(["🚛 FMCSA Scraper", "🤖 AI Scraper"])
 
-# ── Feature Stats Bar ─────────────────────────────────────────────────────────
-st.markdown("""
-<div class="stats-bar">
-  <div class="stat-card sc-blue">
-    <span class="sc-icon">🚛</span>
-    <div class="sc-val">500+</div>
-    <div class="sc-lbl">Carriers Per Run</div>
-    <div class="sc-sub">Bulk scrape in one go</div>
-  </div>
-  <div class="stat-card sc-green">
-    <span class="sc-icon">📊</span>
-    <div class="sc-val">30+</div>
-    <div class="sc-lbl">Data Fields</div>
-    <div class="sc-sub">Name · Address · Safety · Fleet</div>
-  </div>
-  <div class="stat-card sc-purple">
-    <span class="sc-icon">⚡</span>
-    <div class="sc-val">Auto</div>
-    <div class="sc-lbl">Dedup + Detect</div>
-    <div class="sc-sub">MC / USDOT auto-detected</div>
-  </div>
-  <div class="stat-card sc-orange">
-    <span class="sc-icon">📥</span>
-    <div class="sc-val">Free</div>
-    <div class="sc-lbl">Excel + CSV Export</div>
-    <div class="sc-sub">4-sheet report, instant download</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+with _tab_ai:
+    render_ai_tab(groq_key=st.session_state.get("sb_groq_key", ""))
 
-# ── How-to Guide Cards ────────────────────────────────────────────────────────
-st.markdown("""
-<div class="howto-grid">
-
-  <div class="howto-card">
-    <div class="howto-num">1</div>
-    <span class="howto-icon">📋</span>
-    <div class="howto-title">Load Carrier List</div>
-    <div class="howto-desc">
-      Paste MC or USDOT numbers — one per line, or comma separated.
-      Or upload an <b>Excel / CSV</b> file directly.
-    </div>
-  </div>
-
-  <div class="howto-card">
-    <div class="howto-num">2</div>
-    <span class="howto-icon">🔍</span>
-    <div class="howto-title">Preview & Dedup</div>
-    <div class="howto-desc">
-      Tool auto-removes duplicates and shows a preview.
-      Review your list before scraping starts.
-    </div>
-  </div>
-
-  <div class="howto-card">
-    <div class="howto-num">3</div>
-    <span class="howto-icon">🚀</span>
-    <div class="howto-title">Start Scraping</div>
-    <div class="howto-desc">
-      Click <b>▶ Start Scraping</b>. Watch live logs.
-      Hit <b>⏹ Stop</b> anytime — partial results are always saved.
-    </div>
-  </div>
-
-  <div class="howto-card">
-    <div class="howto-num">4</div>
-    <span class="howto-icon">📥</span>
-    <div class="howto-title">Download Report</div>
-    <div class="howto-desc">
-      Get a full <b>Excel report</b> (4 sheets) + Active Only <b>CSV</b>.
-      Filter by status before downloading.
-    </div>
-  </div>
-
-</div>
-
-<div class="howto-tip">
-  <div class="howto-tip-title">💡 Pro Tips</div>
-  <ul>
-    <li>Plain numbers (<code>1597181</code>) or prefixed (<code>MC193369</code>) — both work</li>
-    <li>Tool auto-detects USDOT vs MC and retries if not found</li>
-    <li>Add a free FMCSA API key (sidebar) to bypass IP blocking completely</li>
-    <li>Enable <b>Browser Fallback</b> in sidebar if you see many Blocked results</li>
-  </ul>
-</div>
-""", unsafe_allow_html=True)
-
-
-# ── Visual Step Stepper ───────────────────────────────────────────────────────
-def _render_stepper() -> None:
-    has_ids     = bool(st.session_state.carrier_ids)
-    is_scraping = st.session_state.is_scraping
-    has_results = bool(st.session_state.results_rows)
-
-    if has_results:
-        active = 4
-    elif is_scraping:
-        active = 3
-    elif has_ids:
-        active = 2
-    else:
-        active = 1
-
-    steps = [
-        ("1", "Load List",  "Paste / Upload IDs"),
-        ("2", "Preview",    "Dedup & review"),
-        ("3", "Scraping",   "Live FMCSA fetch"),
-        ("4", "Download",   "Excel + CSV ready"),
-    ]
-
-    def _cls(n: int) -> str:
-        if n < active:  return "step-wrap sw-done"
-        if n == active: return "step-wrap sw-active"
-        return "step-wrap"
-
-    def _circle(n: int, label: str) -> str:
-        if n < active:
-            return '<div class="step-circle">✓</div>'
-        return f'<div class="step-circle">{label}</div>'
-
-    html = '<div class="stepper">'
-    for i, (num, lbl, sub) in enumerate(steps, 1):
-        html += (
-            f'<div class="{_cls(i)}">'
-            f'{_circle(i, num)}'
-            f'<div class="step-label">{lbl}</div>'
-            f'<div class="step-sub">{sub}</div>'
-            f'</div>'
-        )
-    html += '</div>'
-    st.markdown(html, unsafe_allow_html=True)
-
-_render_stepper()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 1 — Input
-# ─────────────────────────────────────────────────────────────────────────────
-
-st.markdown('<div class="sec-head">📂 Step 1 — Load Carrier List</div>',
-            unsafe_allow_html=True)
-
-# ── Resume banner — shown when a saved checkpoint exists ─────────────────────
-_saved_prog = _load_progress_from_disk()
-if _saved_prog and not st.session_state.is_scraping:
-    _done_c   = _saved_prog.get("done_count", 0)
-    _rem_c    = _saved_prog.get("remaining_count", 0)
-    _saved_at = _saved_prog.get("saved_at", "")[:16].replace("T", " ")
+with _tab_fmcsa:
+    # ── Banner ────────────────────────────────────────────────────────────────────
     st.markdown(
-        f'<div class="warn-box" style="margin-bottom:14px;">'
-        f'<b>💾 Unfinished job found</b> — saved at {_saved_at} &nbsp;·&nbsp; '
-        f'<b>{_done_c}</b> done &nbsp;·&nbsp; <b>{_rem_c}</b> remaining'
-        f'</div>',
+        '<div class="ds-header">'
+        '<span style="font-size:3rem">🚛</span>'
+        '<div>'
+        '<h1>FMCSA Bulk Carrier Lookup</h1>'
+        '<p>Upload carrier list → deduplicate → scrape FMCSA → download enriched Excel</p>'
+        '</div>'
+        '<span class="ds-badge">Dispatch DOS</span>'
+        '</div>',
         unsafe_allow_html=True,
     )
-    _rb1, _rb2, _ = st.columns([2, 2, 4])
-    if _rb1.button("▶ Resume Previous Job", type="primary", key="btn_resume"):
-        _rem_ids  = _saved_prog.get("remaining_ids", [])
-        _prev_done = _saved_prog.get("completed_rows", [])
-        _prev_dupes = _saved_prog.get("dupes", [])
-        unique, _, _ = _process_input(_rem_ids)
-        st.session_state.carrier_ids           = unique
-        st.session_state.dupes_removed         = _prev_dupes
-        st.session_state.total_input           = _done_c + _rem_c
-        st.session_state.total_unique          = _done_c + len(unique)
-        st.session_state._resume_existing_rows = _prev_done
-        st.session_state.results_rows          = []
-        st.session_state.output_bytes          = None
-        st.session_state.counts                = {
-            "success":   sum(1 for r in _prev_done if r.get("Scrape_Status") == "Success"),
-            "not_found": sum(1 for r in _prev_done if r.get("Scrape_Status") == "Not_Found"),
-            "failed":    sum(1 for r in _prev_done if r.get("Scrape_Status") == "Failed"),
-            "blocked":   sum(1 for r in _prev_done if r.get("Scrape_Status") == "Blocked"),
-        }
-        st.session_state.log_lines = []
-        st.rerun()
-    if _rb2.button("Discard & Start Fresh", type="secondary", key="btn_discard"):
-        _clear_progress_file()
-        st.rerun()
-
-tab_enter, tab_upload = st.tabs(["📋 Enter Carriers", "📎 Upload Excel / CSV"])
-
-raw_ids_from_input: list[str] = []
-input_triggered = False
-
-# ── Tab A: Enter Carriers (Paste + Range combined) ────────────────────────────
-with tab_enter:
-    input_mode = st.radio(
-        "How do you want to enter carriers?",
-        ["✏️ Paste Numbers", "🔢 Range Search"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-
-    st.markdown("<div style='margin-top:0.5rem'></div>", unsafe_allow_html=True)
-
-    if input_mode == "✏️ Paste Numbers":
-        # ── Live ID counter (reads textarea value from session state) ──────────
-        _raw_paste = st.session_state.get("paste_area", "") or ""
-        _live_ids  = [v.strip() for v in re.split(r"[\n,;\t]+", _raw_paste)
-                      if v.strip() and len(v.strip()) > 1]
-        _live_count = len(_live_ids)
-        _live_dupes = _live_count - len(set(v.upper() for v in _live_ids))
-
-        if _live_count == 0:
-            _badge_cls  = "empty"
-            _badge_text = "📋 Paste IDs below"
+    
+    # ── Feature Stats Bar ─────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="stats-bar">
+      <div class="stat-card sc-blue">
+        <span class="sc-icon">🚛</span>
+        <div class="sc-val">500+</div>
+        <div class="sc-lbl">Carriers Per Run</div>
+        <div class="sc-sub">Bulk scrape in one go</div>
+      </div>
+      <div class="stat-card sc-green">
+        <span class="sc-icon">📊</span>
+        <div class="sc-val">30+</div>
+        <div class="sc-lbl">Data Fields</div>
+        <div class="sc-sub">Name · Address · Safety · Fleet</div>
+      </div>
+      <div class="stat-card sc-purple">
+        <span class="sc-icon">⚡</span>
+        <div class="sc-val">Auto</div>
+        <div class="sc-lbl">Dedup + Detect</div>
+        <div class="sc-sub">MC / USDOT auto-detected</div>
+      </div>
+      <div class="stat-card sc-orange">
+        <span class="sc-icon">📥</span>
+        <div class="sc-val">Free</div>
+        <div class="sc-lbl">Excel + CSV Export</div>
+        <div class="sc-sub">4-sheet report, instant download</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ── How-to Guide Cards ────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="howto-grid">
+    
+      <div class="howto-card">
+        <div class="howto-num">1</div>
+        <span class="howto-icon">📋</span>
+        <div class="howto-title">Load Carrier List</div>
+        <div class="howto-desc">
+          Paste MC or USDOT numbers — one per line, or comma separated.
+          Or upload an <b>Excel / CSV</b> file directly.
+        </div>
+      </div>
+    
+      <div class="howto-card">
+        <div class="howto-num">2</div>
+        <span class="howto-icon">🔍</span>
+        <div class="howto-title">Preview & Dedup</div>
+        <div class="howto-desc">
+          Tool auto-removes duplicates and shows a preview.
+          Review your list before scraping starts.
+        </div>
+      </div>
+    
+      <div class="howto-card">
+        <div class="howto-num">3</div>
+        <span class="howto-icon">🚀</span>
+        <div class="howto-title">Start Scraping</div>
+        <div class="howto-desc">
+          Click <b>▶ Start Scraping</b>. Watch live logs.
+          Hit <b>⏹ Stop</b> anytime — partial results are always saved.
+        </div>
+      </div>
+    
+      <div class="howto-card">
+        <div class="howto-num">4</div>
+        <span class="howto-icon">📥</span>
+        <div class="howto-title">Download Report</div>
+        <div class="howto-desc">
+          Get a full <b>Excel report</b> (4 sheets) + Active Only <b>CSV</b>.
+          Filter by status before downloading.
+        </div>
+      </div>
+    
+    </div>
+    
+    <div class="howto-tip">
+      <div class="howto-tip-title">💡 Pro Tips</div>
+      <ul>
+        <li>Plain numbers (<code>1597181</code>) or prefixed (<code>MC193369</code>) — both work</li>
+        <li>Tool auto-detects USDOT vs MC and retries if not found</li>
+        <li>Add a free FMCSA API key (sidebar) to bypass IP blocking completely</li>
+        <li>Enable <b>Browser Fallback</b> in sidebar if you see many Blocked results</li>
+      </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    
+    # ── Visual Step Stepper ───────────────────────────────────────────────────────
+    def _render_stepper() -> None:
+        has_ids     = bool(st.session_state.carrier_ids)
+        is_scraping = st.session_state.is_scraping
+        has_results = bool(st.session_state.results_rows)
+    
+        if has_results:
+            active = 4
+        elif is_scraping:
+            active = 3
+        elif has_ids:
+            active = 2
         else:
-            _badge_cls  = "has-ids"
-            _badge_text = f"✓ {_live_count} IDs detected"
-        _dupe_html = (
-            f'<span class="id-counter-dupe">· {_live_dupes} duplicate{"s" if _live_dupes != 1 else ""}</span>'
-            if _live_dupes > 0 else ""
-        )
-
+            active = 1
+    
+        steps = [
+            ("1", "Load List",  "Paste / Upload IDs"),
+            ("2", "Preview",    "Dedup & review"),
+            ("3", "Scraping",   "Live FMCSA fetch"),
+            ("4", "Download",   "Excel + CSV ready"),
+        ]
+    
+        def _cls(n: int) -> str:
+            if n < active:  return "step-wrap sw-done"
+            if n == active: return "step-wrap sw-active"
+            return "step-wrap"
+    
+        def _circle(n: int, label: str) -> str:
+            if n < active:
+                return '<div class="step-circle">✓</div>'
+            return f'<div class="step-circle">{label}</div>'
+    
+        html = '<div class="stepper">'
+        for i, (num, lbl, sub) in enumerate(steps, 1):
+            html += (
+                f'<div class="{_cls(i)}">'
+                f'{_circle(i, num)}'
+                f'<div class="step-label">{lbl}</div>'
+                f'<div class="step-sub">{sub}</div>'
+                f'</div>'
+            )
+        html += '</div>'
+        st.markdown(html, unsafe_allow_html=True)
+    
+    _render_stepper()
+    
+    
+    # ─────────────────────────────────────────────────────────────────────────────
+    # SECTION 1 — Input
+    # ─────────────────────────────────────────────────────────────────────────────
+    
+    st.markdown('<div class="sec-head">📂 Step 1 — Load Carrier List</div>',
+                unsafe_allow_html=True)
+    
+    # ── Resume banner — shown when a saved checkpoint exists ─────────────────────
+    _saved_prog = _load_progress_from_disk()
+    if _saved_prog and not st.session_state.is_scraping:
+        _done_c   = _saved_prog.get("done_count", 0)
+        _rem_c    = _saved_prog.get("remaining_count", 0)
+        _saved_at = _saved_prog.get("saved_at", "")[:16].replace("T", " ")
         st.markdown(
-            f'<div class="id-counter-row">'
-            f'  <span class="id-counter-label">Carrier IDs</span>'
-            f'  <span>'
-            f'    <span class="id-counter-badge {_badge_cls}">{_badge_text}</span>'
-            f'    {_dupe_html}'
-            f'  </span>'
+            f'<div class="warn-box" style="margin-bottom:14px;">'
+            f'<b>💾 Unfinished job found</b> — saved at {_saved_at} &nbsp;·&nbsp; '
+            f'<b>{_done_c}</b> done &nbsp;·&nbsp; <b>{_rem_c}</b> remaining'
             f'</div>',
             unsafe_allow_html=True,
         )
-
-        pasted = st.text_area(
-            "Paste carrier IDs", height=200,
-            placeholder="MC193369\n1597181\n793594\nMC123456, MC789012\n...",
-            label_visibility="collapsed", key="paste_area",
+        _rb1, _rb2, _ = st.columns([2, 2, 4])
+        if _rb1.button("▶ Resume Previous Job", type="primary", key="btn_resume"):
+            _rem_ids  = _saved_prog.get("remaining_ids", [])
+            _prev_done = _saved_prog.get("completed_rows", [])
+            _prev_dupes = _saved_prog.get("dupes", [])
+            unique, _, _ = _process_input(_rem_ids)
+            st.session_state.carrier_ids           = unique
+            st.session_state.dupes_removed         = _prev_dupes
+            st.session_state.total_input           = _done_c + _rem_c
+            st.session_state.total_unique          = _done_c + len(unique)
+            st.session_state._resume_existing_rows = _prev_done
+            st.session_state.results_rows          = []
+            st.session_state.output_bytes          = None
+            st.session_state.counts                = {
+                "success":   sum(1 for r in _prev_done if r.get("Scrape_Status") == "Success"),
+                "not_found": sum(1 for r in _prev_done if r.get("Scrape_Status") == "Not_Found"),
+                "failed":    sum(1 for r in _prev_done if r.get("Scrape_Status") == "Failed"),
+                "blocked":   sum(1 for r in _prev_done if r.get("Scrape_Status") == "Blocked"),
+            }
+            st.session_state.log_lines = []
+            st.rerun()
+        if _rb2.button("Discard & Start Fresh", type="secondary", key="btn_discard"):
+            _clear_progress_file()
+            st.rerun()
+    
+    tab_enter, tab_upload = st.tabs(["📋 Enter Carriers", "📎 Upload Excel / CSV"])
+    
+    raw_ids_from_input: list[str] = []
+    input_triggered = False
+    
+    # ── Tab A: Enter Carriers (Paste + Range combined) ────────────────────────────
+    with tab_enter:
+        input_mode = st.radio(
+            "How do you want to enter carriers?",
+            ["✏️ Paste Numbers", "🔢 Range Search"],
+            horizontal=True,
+            label_visibility="collapsed",
         )
-
-        if _live_count > 0:
-            st.markdown(
-                f'<div class="info-box" style="margin-top:6px;">'
-                f'One entry per line · comma/semicolon/tab separated · '
-                f'<b>{_live_count} IDs ready</b>'
-                + (f' · <span style="color:#d97706">{_live_dupes} duplicate{"s" if _live_dupes!=1 else ""} will be removed</span>' if _live_dupes else "")
-                + '</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                '<div class="info-box">One entry per line — or comma/semicolon separated. '
-                'Accepts plain numbers, MC prefix, DOT prefix.</div>',
-                unsafe_allow_html=True,
-            )
-
-        if st.button("Process List", type="primary", key="btn_paste"):
-            if not pasted.strip():
-                st.warning("Please paste at least one carrier ID.")
+    
+        st.markdown("<div style='margin-top:0.5rem'></div>", unsafe_allow_html=True)
+    
+        if input_mode == "✏️ Paste Numbers":
+            # ── Live ID counter (reads textarea value from session state) ──────────
+            _raw_paste = st.session_state.get("paste_area", "") or ""
+            _live_ids  = [v.strip() for v in re.split(r"[\n,;\t]+", _raw_paste)
+                          if v.strip() and len(v.strip()) > 1]
+            _live_count = len(_live_ids)
+            _live_dupes = _live_count - len(set(v.upper() for v in _live_ids))
+    
+            if _live_count == 0:
+                _badge_cls  = "empty"
+                _badge_text = "📋 Paste IDs below"
             else:
-                raw_ids_from_input = re.split(r"[\n,;\t]+", pasted)
-                input_triggered = True
-
-    else:  # Range Search
-        st.markdown(
-            '<div class="info-box">Enter a <b>Start</b> and <b>End</b> number — '
-            'the tool auto-generates every number in between and scrapes them all.</div>',
-            unsafe_allow_html=True,
-        )
-        r1, r2 = st.columns(2)
-        range_start = r1.number_input("Start Number", min_value=1, value=1000,
-                                       step=1, key="range_start")
-        range_end   = r2.number_input("End Number",   min_value=1, value=5000,
-                                       step=1, key="range_end")
-
-        range_count = int(range_end) - int(range_start) + 1
-        _MAX_RANGE  = 5000
-
-        if range_end >= range_start:
-            # Range search always uses 1 worker
-            est_range_min = max(1, int(range_count * (delay_min + delay_max) / 2 / 60))
-            est_range_max = max(1, int(range_count * delay_max / 60))
-            if range_count <= _MAX_RANGE:
-                _est_hrs = est_range_max // 60
-                _est_rem = est_range_max % 60
-                _est_str = (f"~{_est_hrs}h {_est_rem}m" if _est_hrs else f"~{est_range_min}–{est_range_max} min")
+                _badge_cls  = "has-ids"
+                _badge_text = f"✓ {_live_count} IDs detected"
+            _dupe_html = (
+                f'<span class="id-counter-dupe">· {_live_dupes} duplicate{"s" if _live_dupes != 1 else ""}</span>'
+                if _live_dupes > 0 else ""
+            )
+    
+            st.markdown(
+                f'<div class="id-counter-row">'
+                f'  <span class="id-counter-label">Carrier IDs</span>'
+                f'  <span>'
+                f'    <span class="id-counter-badge {_badge_cls}">{_badge_text}</span>'
+                f'    {_dupe_html}'
+                f'  </span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+    
+            pasted = st.text_area(
+                "Paste carrier IDs", height=200,
+                placeholder="MC193369\n1597181\n793594\nMC123456, MC789012\n...",
+                label_visibility="collapsed", key="paste_area",
+            )
+    
+            if _live_count > 0:
                 st.markdown(
-                    f'<div class="info-box">'
-                    f'📦 <b>{range_count} numbers</b> will be generated '
-                    f'({int(range_start)} → {int(range_end)}) &nbsp;·&nbsp; '
-                    f'⏱ Est. time: <b>{_est_str}</b> &nbsp;·&nbsp; '
-                    f'💾 Auto-save every 50 carriers'
-                    f'</div>',
+                    f'<div class="info-box" style="margin-top:6px;">'
+                    f'One entry per line · comma/semicolon/tab separated · '
+                    f'<b>{_live_count} IDs ready</b>'
+                    + (f' · <span style="color:#d97706">{_live_dupes} duplicate{"s" if _live_dupes!=1 else ""} will be removed</span>' if _live_dupes else "")
+                    + '</div>',
                     unsafe_allow_html=True,
                 )
             else:
-                st.warning(
-                    f"Range too large: {range_count} numbers. "
-                    f"Maximum allowed is {_MAX_RANGE}. Please reduce the range."
+                st.markdown(
+                    '<div class="info-box">One entry per line — or comma/semicolon separated. '
+                    'Accepts plain numbers, MC prefix, DOT prefix.</div>',
+                    unsafe_allow_html=True,
                 )
-
-        if st.button("Generate & Load Range", type="primary", key="btn_range"):
-            if range_end < range_start:
-                st.error("End number must be ≥ Start number.")
-            elif range_count > _MAX_RANGE:
-                st.error(f"Range too large ({range_count}). Maximum is {_MAX_RANGE}.")
-            else:
-                raw_ids_from_input = [str(n) for n in range(int(range_start),
-                                                              int(range_end) + 1)]
-                input_triggered = True
-                st.session_state["_range_search"] = True
-                st.success(f"Generated {range_count} numbers "
-                           f"({int(range_start)} → {int(range_end)}).")
-
-# ── Tab B: File Upload ────────────────────────────────────────────────────────
-with tab_upload:
-    st.markdown(
-        '<div class="info-box">Upload <b>.xlsx</b> or <b>.csv</b>. '
-        'The scraper auto-detects the MC/DOT column (or specify it below).</div>',
-        unsafe_allow_html=True,
-    )
-    uploaded = st.file_uploader(
-        "Drop file here", type=["xlsx", "csv"],
-        label_visibility="collapsed", key="file_upload",
-    )
-    col_hint = st.text_input(
-        "Column name (optional)",
-        placeholder="e.g.  MC Number   ← leave blank to auto-detect",
-        key="col_hint",
-    )
-    if uploaded:
-        if st.button("Process File", type="primary", key="btn_file"):
-            try:
-                if uploaded.name.endswith(".csv"):
-                    df_raw = pd.read_csv(uploaded, dtype=str)
+    
+            if st.button("Process List", type="primary", key="btn_paste"):
+                if not pasted.strip():
+                    st.warning("Please paste at least one carrier ID.")
                 else:
-                    df_raw = pd.read_excel(uploaded, dtype=str)
-                if df_raw.empty:
-                    st.error("File appears to be empty.")
-                else:
-                    col = (col_hint.strip()
-                           if col_hint.strip() and col_hint.strip() in df_raw.columns
-                           else _detect_column(df_raw))
-                    raw_ids_from_input = df_raw[col].dropna().astype(str).tolist()
+                    raw_ids_from_input = re.split(r"[\n,;\t]+", pasted)
                     input_triggered = True
-                    st.success(f"Loaded **{len(raw_ids_from_input)}** rows from column **'{col}'**.")
-            except Exception as exc:
-                st.error(f"Could not read file: {exc}")
-
-
-# ── Apply dedup when input is submitted ───────────────────────────────────────
-if input_triggered and raw_ids_from_input:
-    unique, dupes, total_in = _process_input(raw_ids_from_input)
-    st.session_state.carrier_ids    = unique
-    st.session_state.dupes_removed  = dupes
-    st.session_state.total_input    = total_in
-    st.session_state.total_unique   = len(unique)
-    # Reset any previous results
-    st.session_state.results_rows        = []
-    st.session_state.output_bytes        = None
-    st.session_state.counts              = {"success": 0, "not_found": 0,
-                                            "failed": 0, "blocked": 0}
-    st.session_state.log_lines           = []
-    # New input = fresh run — clear resume state so old data doesn't bleed in
-    st.session_state._resume_existing_rows = []
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 2 — Preview & Dedup Stats
-# ─────────────────────────────────────────────────────────────────────────────
-
-if st.session_state.carrier_ids:
-    st.markdown('<hr class="div">', unsafe_allow_html=True)
-    st.markdown('<div class="sec-head">📊 Step 2 — Preview & Deduplication</div>',
-                unsafe_allow_html=True)
-
-    # Metric cards
-    _cards(
-        (st.session_state.total_input,  "Total Input",        "c-blue"),
-        (st.session_state.total_unique, "Unique Records",     "c-green"),
-        (len(st.session_state.dupes_removed), "Duplicates Removed", "c-yellow"),
-    )
-
-    # Preview table
-    preview_n = min(50, len(st.session_state.carrier_ids))
-    st.dataframe(
-        pd.DataFrame({"#": range(1, preview_n + 1),
-                      "Carrier_ID": st.session_state.carrier_ids[:preview_n]}),
-        width="stretch", height=200, hide_index=True,
-        column_config={
-            "#":          st.column_config.NumberColumn(width="small"),
-            "Carrier_ID": st.column_config.TextColumn("Carrier ID", width="large"),
-        },
-    )
-    if len(st.session_state.carrier_ids) > preview_n:
-        st.caption(f"Showing first {preview_n} of "
-                   f"{len(st.session_state.carrier_ids)} unique records.")
-
-    # Duplicates expander
-    if st.session_state.dupes_removed:
-        with st.expander(f"🔍 {len(st.session_state.dupes_removed)} duplicates removed"):
-            st.dataframe(
-                pd.DataFrame({"Duplicate": st.session_state.dupes_removed}),
-                width="stretch", height=180, hide_index=True,
-            )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 3 — Scraping
-# ─────────────────────────────────────────────────────────────────────────────
-
-if st.session_state.carrier_ids:
-    st.markdown('<hr class="div">', unsafe_allow_html=True)
-    st.markdown('<div class="sec-head">🚀 Step 3 — Scrape FMCSA</div>',
-                unsafe_allow_html=True)
-
-    n_carriers   = len(st.session_state.carrier_ids)
-    avg_delay    = (delay_min + delay_max) / 2
-    # Use 1 worker for range search (set before thread start), 3 for paste/upload
-    _is_range    = st.session_state.get("_range_search", False)
-    _workers     = 1 if _is_range else _current_settings.get("max_concurrent", 3)
-    est_min      = max(1, int(n_carriers * avg_delay / 60 / _workers))
-    est_max      = max(1, int(n_carriers * delay_max / 60 / _workers))
-
-    # Settings summary + prominent time estimate
-    c1, c2 = st.columns(2)
-    c1.metric("Records to Scrape", n_carriers)
-    c2.metric("Delay Between Requests", f"{delay_min}–{delay_max}s")
-
-    st.markdown(
-        f'<div class="info-box" style="margin-top:0.6rem;">'
-        f'⏱ <b>Estimated completion time:</b> '
-        f'<span style="color:#3b82f6;font-size:1.05em;font-weight:700;">'
-        f'~{est_min}–{est_max} minutes</span> '
-        f'<span style="color:#64748b;font-size:0.88em;">'
-        f'({n_carriers} carriers · {_workers} workers · {delay_min}–{delay_max}s delay)'
-        f'</span> — keep this tab open while scraping'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── NOT SCRAPING — show Start button ─────────────────────────────────────
-    if not st.session_state.is_scraping:
-        btn_col, _ = st.columns([2, 6])
-        if btn_col.button("▶  Start Scraping", type="primary",
-                          use_container_width=True, key="btn_start"):
-            # Initialise runtime objects
-            lq = queue.Queue()
-            pq = queue.Queue()
-            rs: list = []
-            stop_ev = threading.Event()
-
-            st.session_state.log_q        = lq
-            st.session_state.prog_q       = pq
-            st.session_state.result_store = rs
-            st.session_state.stop_event   = stop_ev
-            st.session_state.log_lines    = []
-            st.session_state.prog_current = 0
-            st.session_state.prog_total   = n_carriers
-            st.session_state.last_id      = ""
-            st.session_state.counts       = {"success": 0, "not_found": 0,
-                                              "failed": 0, "blocked": 0}
-            st.session_state.results_rows  = []
-            st.session_state.output_bytes  = None
-            st.session_state._settings     = _current_settings
-            st.session_state.scrape_elapsed = None
-            st.session_state["_toast_shown"] = False
-
-            # Fresh run (not a resume) → clear any leftover progress file
-            if not st.session_state.get("_resume_existing_rows"):
-                _clear_progress_file()
-
-            # Apply range-search optimisations BEFORE thread starts (avoids race condition)
-            if st.session_state.get("_range_search", False):
-                _current_settings["skip_type_retry"] = True
-                _current_settings["max_concurrent"]  = 1  # 1 worker to avoid IP blocking
-                st.session_state["_range_search"] = False
-
-            thread = threading.Thread(
-                target=_scraper_thread,
-                args=(
-                    st.session_state.carrier_ids,
-                    _current_settings,
-                    lq, pq, rs, stop_ev,
-                    st.session_state.get("_resume_existing_rows", []),
-                    st.session_state.dupes_removed,
-                ),
-                daemon=True,
-            )
-            thread.start()
-            st.session_state.scrape_thread   = thread
-            st.session_state.is_scraping     = True
-            st.session_state.scrape_start_time = time.time()
-            st.rerun()
-
-    # ── ACTIVELY SCRAPING — live progress ─────────────────────────────────────
-    else:
-        _drain_queues()
-
-        cur    = st.session_state.prog_current
-        total  = st.session_state.prog_total
-        counts = st.session_state.counts
-        pct    = cur / total if total > 0 else 0
-
-        # 2. Live pulse dot badge
-        st.markdown(
-            '<div class="live-badge">'
-            '<span class="live-dot"></span> LIVE — Scraping in progress'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
-        # Stop button
-        s_col, _ = st.columns([2, 6])
-        if s_col.button("⏹  Stop Scraping", type="secondary",
-                        use_container_width=True, key="btn_stop"):
-            ev = st.session_state.stop_event
-            if ev:
-                ev.set()
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Progress bar + status text + ETA
-        st.progress(pct)
-        last = st.session_state.last_id
-        eta_str = ""
-        elapsed_str = ""
-        start_t = st.session_state.scrape_start_time
-        if start_t and cur > 0:
-            elapsed   = time.time() - start_t
-            avg_per   = elapsed / cur
-            remaining = avg_per * (total - cur)
-            elapsed_str = (f"{int(elapsed//60)}m {int(elapsed%60)}s"
-                           if elapsed >= 60 else f"{int(elapsed)}s")
-            remain_min  = int(remaining // 60)
-            remain_sec  = int(remaining % 60)
-            eta_str     = (f"~{remain_min}m {remain_sec}s remaining"
-                           if remain_min > 0 else f"~{remain_sec}s remaining")
-        st.markdown(
-            f"**{cur} / {total}** scraped"
-            + (f"  ·  last: `{last}`" if last else "")
-            + (f"  ·  ⏱ elapsed: **{elapsed_str}**  ·  ETA: **{eta_str}**"
-               if eta_str else ""),
-        )
-
-        # Live counter cards
-        _cards(
-            (counts["success"],   "Success",   "c-green"),
-            (counts["not_found"], "Not Found", "c-yellow"),
-            (counts["failed"],    "Failed",    "c-red"),
-            (counts["blocked"],   "Blocked",   "c-purple"),
-            (total - cur,         "Remaining", "c-slate"),
-        )
-
-        # Live log
-        with st.expander("📋 Live Logs", expanded=True):
-            last_120 = "".join(st.session_state.log_lines[-120:])
+    
+        else:  # Range Search
             st.markdown(
-                f'<div class="log-box">{last_120}</div>',
+                '<div class="info-box">Enter a <b>Start</b> and <b>End</b> number — '
+                'the tool auto-generates every number in between and scrapes them all.</div>',
                 unsafe_allow_html=True,
             )
-
-        # Keep polling until thread is done
-        if st.session_state.is_scraping:
-            time.sleep(1.5)
-            st.rerun()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 4 — Results
-# ─────────────────────────────────────────────────────────────────────────────
-
-rows = st.session_state.results_rows
-if rows:
-    st.markdown('<hr class="div">', unsafe_allow_html=True)
-    st.markdown('<div class="sec-head">✅ Step 4 — Results</div>',
-                unsafe_allow_html=True)
-
-    results_df = pd.DataFrame(rows, columns=OUTPUT_COLS)
-    counts     = st.session_state.counts
-
-    # ── Toast notification (shows only once per run) ───────────────────────────
-    if not st.session_state.get("_toast_shown", False):
-        st.session_state["_toast_shown"] = True
-        st.toast(
-            f"✅ Done! {counts['success']} carriers found out of {len(results_df)} processed.",
-            icon="🚛",
+            r1, r2 = st.columns(2)
+            range_start = r1.number_input("Start Number", min_value=1, value=1000,
+                                           step=1, key="range_start")
+            range_end   = r2.number_input("End Number",   min_value=1, value=5000,
+                                           step=1, key="range_end")
+    
+            range_count = int(range_end) - int(range_start) + 1
+            _MAX_RANGE  = 5000
+    
+            if range_end >= range_start:
+                # Range search always uses 1 worker
+                est_range_min = max(1, int(range_count * (delay_min + delay_max) / 2 / 60))
+                est_range_max = max(1, int(range_count * delay_max / 60))
+                if range_count <= _MAX_RANGE:
+                    _est_hrs = est_range_max // 60
+                    _est_rem = est_range_max % 60
+                    _est_str = (f"~{_est_hrs}h {_est_rem}m" if _est_hrs else f"~{est_range_min}–{est_range_max} min")
+                    st.markdown(
+                        f'<div class="info-box">'
+                        f'📦 <b>{range_count} numbers</b> will be generated '
+                        f'({int(range_start)} → {int(range_end)}) &nbsp;·&nbsp; '
+                        f'⏱ Est. time: <b>{_est_str}</b> &nbsp;·&nbsp; '
+                        f'💾 Auto-save every 50 carriers'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.warning(
+                        f"Range too large: {range_count} numbers. "
+                        f"Maximum allowed is {_MAX_RANGE}. Please reduce the range."
+                    )
+    
+            if st.button("Generate & Load Range", type="primary", key="btn_range"):
+                if range_end < range_start:
+                    st.error("End number must be ≥ Start number.")
+                elif range_count > _MAX_RANGE:
+                    st.error(f"Range too large ({range_count}). Maximum is {_MAX_RANGE}.")
+                else:
+                    raw_ids_from_input = [str(n) for n in range(int(range_start),
+                                                                  int(range_end) + 1)]
+                    input_triggered = True
+                    st.session_state["_range_search"] = True
+                    st.success(f"Generated {range_count} numbers "
+                               f"({int(range_start)} → {int(range_end)}).")
+    
+    # ── Tab B: File Upload ────────────────────────────────────────────────────────
+    with tab_upload:
+        st.markdown(
+            '<div class="info-box">Upload <b>.xlsx</b> or <b>.csv</b>. '
+            'The scraper auto-detects the MC/DOT column (or specify it below).</div>',
+            unsafe_allow_html=True,
         )
-
-    # ── Compute summary numbers ────────────────────────────────────────────────
-    status_series  = results_df["Carrier_Status"].str.upper()
-    n_active       = int((status_series == "ACTIVE").sum())
-    n_oos          = int((status_series == "OUT_OF_SERVICE").sum())
-    n_inactive     = int((status_series == "INACTIVE").sum())
-    n_total        = len(results_df)
-    n_success      = counts["success"]
-    n_not_found    = counts["not_found"]
-    success_rate   = round(n_success / n_total * 100, 1) if n_total else 0
-
-    elapsed_sec = st.session_state.get("scrape_elapsed")
-    if elapsed_sec:
-        elapsed_min = int(elapsed_sec // 60)
-        elapsed_s   = int(elapsed_sec % 60)
-        time_str    = f"{elapsed_min}m {elapsed_s}s" if elapsed_min else f"{elapsed_s}s"
-    else:
-        time_str = ""
-
-    # ── Rich summary banner ────────────────────────────────────────────────────
-    pills_html = (
-        f'<span class="sum-pill sum-pill-rate">📊 {success_rate}% success rate</span>'
-        f'<span class="sum-pill sum-pill-active">🟢 {n_active} Active</span>'
-        f'<span class="sum-pill sum-pill-oos">🔴 {n_oos} Out of Service</span>'
-        f'<span class="sum-pill sum-pill-inactive">🟡 {n_inactive} Inactive</span>'
-        f'<span class="sum-pill sum-pill-notfound">⚫ {n_not_found} Not Found</span>'
-        + (f'<span class="sum-pill sum-pill-time">⏱ {time_str}</span>' if time_str else "")
-    )
-    st.markdown(
-        f'<div class="sum-banner">'
-        f'  <div class="sum-banner-top">✅ Scraping Complete — {n_success} carriers found out of {n_total}</div>'
-        f'  <div class="sum-banner-pills">{pills_html}</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Summary metrics
-    _cards(
-        (len(results_df),         "Total Processed", "c-blue"),
-        (counts["success"],        "Success",         "c-green"),
-        (counts["not_found"],      "Not Found",       "c-yellow"),
-        (counts["failed"],         "Failed",          "c-red"),
-        (counts["blocked"],        "Blocked",         "c-purple"),
-    )
-
-    # counter animation JS removed (components.html deprecated)
-
-    # ── Active Only filter toggle ──────────────────────────────────────────────
-    def _carrier_badge(status: str) -> str:
-        s = status.upper()
-        if s == "ACTIVE":            return "🟢 Active"
-        if s == "OUT_OF_SERVICE":    return "🔴 Out of Service"
-        if s == "INACTIVE":          return "🟡 Inactive"
-        return "⚫ —"
-
-    # ── Pie chart: status distribution ────────────────────────────────────────
-    status_counts = results_df["Carrier_Status"].str.upper().value_counts().reset_index()
-    status_counts.columns = ["Status", "Count"]
-    color_map = {"ACTIVE": "#22c55e", "INACTIVE": "#f59e0b", "OUT_OF_SERVICE": "#ef4444", "UNKNOWN": "#94a3b8"}
-    pie_fig = px.pie(
-        status_counts, names="Status", values="Count",
-        color="Status", color_discrete_map=color_map,
-        title="Carrier Status Distribution",
-        hole=0.45,
-    )
-    pie_fig.update_traces(textposition="inside", textinfo="percent+label")
-    pie_fig.update_layout(
-        margin=dict(t=40, b=0, l=0, r=0),
-        height=280,
-        showlegend=False,
-        title_font_size=13,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#f1f5f9",
-    )
-    pie_col, _ = st.columns([2, 3])
-    pie_col.plotly_chart(pie_fig, use_container_width=True)
-
-    # ── Status filter ──────────────────────────────────────────────────────────
-    f_col, _ = st.columns([3, 5])
-    status_filter = f_col.selectbox(
-        "Filter by status",
-        ["ALL", "ACTIVE", "INACTIVE", "OUT_OF_SERVICE"],
-        index=0,
-        label_visibility="collapsed",
-    )
-
-    # Build preview dataframe with badge column
-    preview_cols = [
-        "Input_ID", "Scrape_Status", "Carrier_Status",
-        "Legal_Name", "DBA_Name", "USDOT_Number", "MC_Number",
-        "Physical_Address", "Phone",
-        "Safety_Rating", "OOS_Percentage",
-        "Power_Units", "Drivers",
-    ]
-    preview_df = results_df[[c for c in preview_cols if c in results_df.columns]].copy()
-    preview_df.insert(2, "Status_Badge",
-                      preview_df["Carrier_Status"].apply(_carrier_badge))
-
-    if status_filter != "ALL":
-        preview_df = preview_df[preview_df["Carrier_Status"].str.upper() == status_filter]
-        st.caption(f"Showing {len(preview_df)} {status_filter} carriers out of {len(results_df)} total.")
-
-    # Row color coding based on carrier status
-    def _style_row(row: pd.Series):
-        s = str(row.get("Carrier_Status", "")).upper()
-        if s == "ACTIVE":
-            return ["background-color:#dcfce7; color:#15803d"] * len(row)
-        if s == "OUT_OF_SERVICE":
-            return ["background-color:#fee2e2; color:#b91c1c"] * len(row)
-        if s == "INACTIVE":
-            return ["background-color:#fef9c3; color:#92400e"] * len(row)
-        return [""] * len(row)
-
-    styled_df = preview_df.style.apply(_style_row, axis=1)
-
-    st.dataframe(
-        styled_df, width="stretch", height=360, hide_index=True,
-        column_config={
-            "Input_ID":       st.column_config.TextColumn("Input ID",      width="small"),
-            "Scrape_Status":  st.column_config.TextColumn("Scrape Status", width="small"),
-            "Status_Badge":   st.column_config.TextColumn("Status",        width="medium"),
-            "Carrier_Status": None,
-            "Legal_Name":     st.column_config.TextColumn("Legal Name",    width="large"),
-            "DBA_Name":       st.column_config.TextColumn("DBA",           width="medium"),
-            "USDOT_Number":   st.column_config.TextColumn("USDOT",         width="small"),
-            "MC_Number":      st.column_config.TextColumn("MC #",          width="small"),
-            "Physical_Address": st.column_config.TextColumn("Address",     width="large"),
-            "Phone":          st.column_config.TextColumn("Phone",         width="small"),
-            "Safety_Rating":  st.column_config.TextColumn("Safety Rating", width="medium"),
-            "OOS_Percentage": st.column_config.TextColumn("OOS %",         width="small"),
-            "Power_Units":    st.column_config.TextColumn("Units",         width="small"),
-            "Drivers":        st.column_config.TextColumn("Drivers",       width="small"),
-        },
-    )
-
-    # Failed records expander
-    failed_df = results_df[results_df["Scrape_Status"].isin(_FAILED_STATUSES)]
-    if not failed_df.empty:
-        with st.expander(f"⚠️  {len(failed_df)} records need attention"):
-            st.dataframe(
-                failed_df[["Input_ID", "Scrape_Status", "Error_Detail"]],
-                width="stretch", height=200, hide_index=True,
-            )
-
-    # ── Action buttons ────────────────────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    dl_col, active_col, retry_col, new_col = st.columns([3, 3, 2, 2])
-
-    ts = datetime.now().strftime("%Y-%m-%d")
-    filename = f"DispatchDOS_FMCSA_{ts}.xlsx"
-
-    # Build Excel if not already built (e.g. after a stop)
-    if st.session_state.output_bytes is None and rows:
-        st.session_state.output_bytes = _build_excel(
-            rows, st.session_state.dupes_removed, _current_settings
+        uploaded = st.file_uploader(
+            "Drop file here", type=["xlsx", "csv"],
+            label_visibility="collapsed", key="file_upload",
         )
-
-    if st.session_state.output_bytes:
-        dl_col.download_button(
-            "⬇️  Download All (Excel)",
-            data=st.session_state.output_bytes,
-            file_name=filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            use_container_width=True,
+        col_hint = st.text_input(
+            "Column name (optional)",
+            placeholder="e.g.  MC Number   ← leave blank to auto-detect",
+            key="col_hint",
         )
-
-    # Download Active Only as CSV
-    active_rows = [r for r in rows
-                   if str(r.get("Carrier_Status", "")).upper() == "ACTIVE"]
-    if active_rows:
-        active_df = pd.DataFrame(active_rows)
-        active_csv = active_df.to_csv(index=False).encode("utf-8")
-        active_col.download_button(
-            f"🟢  Active Only ({len(active_rows)})",
-            data=active_csv,
-            file_name=f"DispatchDOS_Active_{ts}.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-
-    if retry_col.button(
-        "🔄  Retry Failed",
-        use_container_width=True,
-        disabled=failed_df.empty,
-        key="btn_retry",
-    ):
-        retry_ids = failed_df["Input_ID"].tolist()
-        unique, dupes, total_in = _process_input(retry_ids)
+        if uploaded:
+            if st.button("Process File", type="primary", key="btn_file"):
+                try:
+                    if uploaded.name.endswith(".csv"):
+                        df_raw = pd.read_csv(uploaded, dtype=str)
+                    else:
+                        df_raw = pd.read_excel(uploaded, dtype=str)
+                    if df_raw.empty:
+                        st.error("File appears to be empty.")
+                    else:
+                        col = (col_hint.strip()
+                               if col_hint.strip() and col_hint.strip() in df_raw.columns
+                               else _detect_column(df_raw))
+                        raw_ids_from_input = df_raw[col].dropna().astype(str).tolist()
+                        input_triggered = True
+                        st.success(f"Loaded **{len(raw_ids_from_input)}** rows from column **'{col}'**.")
+                except Exception as exc:
+                    st.error(f"Could not read file: {exc}")
+    
+    
+    # ── Apply dedup when input is submitted ───────────────────────────────────────
+    if input_triggered and raw_ids_from_input:
+        unique, dupes, total_in = _process_input(raw_ids_from_input)
         st.session_state.carrier_ids    = unique
         st.session_state.dupes_removed  = dupes
         st.session_state.total_input    = total_in
         st.session_state.total_unique   = len(unique)
-        st.session_state.results_rows   = []
-        st.session_state.output_bytes   = None
-        st.session_state.counts         = {"success": 0, "not_found": 0,
-                                            "failed": 0, "blocked": 0}
-        st.session_state.log_lines      = []
-        st.rerun()
+        # Reset any previous results
+        st.session_state.results_rows        = []
+        st.session_state.output_bytes        = None
+        st.session_state.counts              = {"success": 0, "not_found": 0,
+                                                "failed": 0, "blocked": 0}
+        st.session_state.log_lines           = []
+        # New input = fresh run — clear resume state so old data doesn't bleed in
+        st.session_state._resume_existing_rows = []
+    
+    
+    # ─────────────────────────────────────────────────────────────────────────────
+    # SECTION 2 — Preview & Dedup Stats
+    # ─────────────────────────────────────────────────────────────────────────────
+    
+    if st.session_state.carrier_ids:
+        st.markdown('<hr class="div">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-head">📊 Step 2 — Preview & Deduplication</div>',
+                    unsafe_allow_html=True)
+    
+        # Metric cards
+        _cards(
+            (st.session_state.total_input,  "Total Input",        "c-blue"),
+            (st.session_state.total_unique, "Unique Records",     "c-green"),
+            (len(st.session_state.dupes_removed), "Duplicates Removed", "c-yellow"),
+        )
+    
+        # Preview table
+        preview_n = min(50, len(st.session_state.carrier_ids))
+        st.dataframe(
+            pd.DataFrame({"#": range(1, preview_n + 1),
+                          "Carrier_ID": st.session_state.carrier_ids[:preview_n]}),
+            use_container_width=True, height=200, hide_index=True,
+            column_config={
+                "#":          st.column_config.NumberColumn(width="small"),
+                "Carrier_ID": st.column_config.TextColumn("Carrier ID", width="large"),
+            },
+        )
+        if len(st.session_state.carrier_ids) > preview_n:
+            st.caption(f"Showing first {preview_n} of "
+                       f"{len(st.session_state.carrier_ids)} unique records.")
+    
+        # Duplicates expander
+        if st.session_state.dupes_removed:
+            with st.expander(f"🔍 {len(st.session_state.dupes_removed)} duplicates removed"):
+                st.dataframe(
+                    pd.DataFrame({"Duplicate": st.session_state.dupes_removed}),
+                    use_container_width=True, height=180, hide_index=True,
+                )
+    
+    
+    # ─────────────────────────────────────────────────────────────────────────────
+    # SECTION 3 — Scraping
+    # ─────────────────────────────────────────────────────────────────────────────
+    
+    if st.session_state.carrier_ids:
+        st.markdown('<hr class="div">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-head">🚀 Step 3 — Scrape FMCSA</div>',
+                    unsafe_allow_html=True)
+    
+        n_carriers   = len(st.session_state.carrier_ids)
+        avg_delay    = (delay_min + delay_max) / 2
+        # Use 1 worker for range search (set before thread start), 3 for paste/upload
+        _is_range    = st.session_state.get("_range_search", False)
+        _workers     = 1 if _is_range else _current_settings.get("max_concurrent", 3)
+        est_min      = max(1, int(n_carriers * avg_delay / 60 / _workers))
+        est_max      = max(1, int(n_carriers * delay_max / 60 / _workers))
+    
+        # Settings summary + prominent time estimate
+        c1, c2 = st.columns(2)
+        c1.metric("Records to Scrape", n_carriers)
+        c2.metric("Delay Between Requests", f"{delay_min}–{delay_max}s")
+    
+        st.markdown(
+            f'<div class="info-box" style="margin-top:0.6rem;">'
+            f'⏱ <b>Estimated completion time:</b> '
+            f'<span style="color:#3b82f6;font-size:1.05em;font-weight:700;">'
+            f'~{est_min}–{est_max} minutes</span> '
+            f'<span style="color:#64748b;font-size:0.88em;">'
+            f'({n_carriers} carriers · {_workers} workers · {delay_min}–{delay_max}s delay)'
+            f'</span> — keep this tab open while scraping'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    
+        # ── NOT SCRAPING — show Start button ─────────────────────────────────────
+        if not st.session_state.is_scraping:
+            btn_col, _ = st.columns([2, 6])
+            if btn_col.button("▶  Start Scraping", type="primary",
+                              use_container_width=True, key="btn_start"):
+                # Initialise runtime objects
+                lq = queue.Queue()
+                pq = queue.Queue()
+                rs: list = []
+                stop_ev = threading.Event()
+    
+                st.session_state.log_q        = lq
+                st.session_state.prog_q       = pq
+                st.session_state.result_store = rs
+                st.session_state.stop_event   = stop_ev
+                st.session_state.log_lines    = []
+                st.session_state.prog_current = 0
+                st.session_state.prog_total   = n_carriers
+                st.session_state.last_id      = ""
+                st.session_state.counts       = {"success": 0, "not_found": 0,
+                                                  "failed": 0, "blocked": 0}
+                st.session_state.results_rows  = []
+                st.session_state.output_bytes  = None
+                st.session_state._settings     = _current_settings
+                st.session_state.scrape_elapsed = None
+                st.session_state["_toast_shown"] = False
+    
+                # Fresh run (not a resume) → clear any leftover progress file
+                if not st.session_state.get("_resume_existing_rows"):
+                    _clear_progress_file()
+    
+                # Apply range-search optimisations BEFORE thread starts (avoids race condition)
+                if st.session_state.get("_range_search", False):
+                    _current_settings["skip_type_retry"] = True
+                    _current_settings["max_concurrent"]  = 1  # 1 worker to avoid IP blocking
+                    st.session_state["_range_search"] = False
+    
+                thread = threading.Thread(
+                    target=_scraper_thread,
+                    args=(
+                        st.session_state.carrier_ids,
+                        _current_settings,
+                        lq, pq, rs, stop_ev,
+                        st.session_state.get("_resume_existing_rows", []),
+                        st.session_state.dupes_removed,
+                    ),
+                    daemon=True,
+                )
+                thread.start()
+                st.session_state.scrape_thread   = thread
+                st.session_state.is_scraping     = True
+                st.session_state.scrape_start_time = time.time()
+                st.rerun()
+    
+        # ── ACTIVELY SCRAPING — live progress ─────────────────────────────────────
+        else:
+            _drain_queues()
+    
+            cur    = st.session_state.prog_current
+            total  = st.session_state.prog_total
+            counts = st.session_state.counts
+            pct    = cur / total if total > 0 else 0
+    
+            # 2. Live pulse dot badge
+            st.markdown(
+                '<div class="live-badge">'
+                '<span class="live-dot"></span> LIVE — Scraping in progress'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+    
+            # Stop button
+            s_col, _ = st.columns([2, 6])
+            if s_col.button("⏹  Stop Scraping", type="secondary",
+                            use_container_width=True, key="btn_stop"):
+                ev = st.session_state.stop_event
+                if ev:
+                    ev.set()
+    
+            st.markdown("<br>", unsafe_allow_html=True)
+    
+            # Progress bar + status text + ETA
+            st.progress(pct)
+            last = st.session_state.last_id
+            eta_str = ""
+            elapsed_str = ""
+            start_t = st.session_state.scrape_start_time
+            if start_t and cur > 0:
+                elapsed   = time.time() - start_t
+                avg_per   = elapsed / cur
+                remaining = avg_per * (total - cur)
+                elapsed_str = (f"{int(elapsed//60)}m {int(elapsed%60)}s"
+                               if elapsed >= 60 else f"{int(elapsed)}s")
+                remain_min  = int(remaining // 60)
+                remain_sec  = int(remaining % 60)
+                eta_str     = (f"~{remain_min}m {remain_sec}s remaining"
+                               if remain_min > 0 else f"~{remain_sec}s remaining")
+            st.markdown(
+                f"**{cur} / {total}** scraped"
+                + (f"  ·  last: `{last}`" if last else "")
+                + (f"  ·  ⏱ elapsed: **{elapsed_str}**  ·  ETA: **{eta_str}**"
+                   if eta_str else ""),
+            )
+    
+            # Live counter cards
+            _cards(
+                (counts["success"],   "Success",   "c-green"),
+                (counts["not_found"], "Not Found", "c-yellow"),
+                (counts["failed"],    "Failed",    "c-red"),
+                (counts["blocked"],   "Blocked",   "c-purple"),
+                (total - cur,         "Remaining", "c-slate"),
+            )
+    
+            # Live log
+            with st.expander("📋 Live Logs", expanded=True):
+                last_120 = "".join(st.session_state.log_lines[-120:])
+                st.markdown(
+                    f'<div class="log-box">{last_120}</div>',
+                    unsafe_allow_html=True,
+                )
+    
+            # Keep polling until thread is done
+            if st.session_state.is_scraping:
+                time.sleep(1.5)
+                st.rerun()
+    
+    
+    # ─────────────────────────────────────────────────────────────────────────────
+    # SECTION 4 — Results
+    # ─────────────────────────────────────────────────────────────────────────────
+    
+    rows = st.session_state.results_rows
+    if rows:
+        st.markdown('<hr class="div">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-head">✅ Step 4 — Results</div>',
+                    unsafe_allow_html=True)
+    
+        results_df = pd.DataFrame(rows, columns=OUTPUT_COLS)
+        counts     = st.session_state.counts
+    
+        # ── Toast notification (shows only once per run) ───────────────────────────
+        if not st.session_state.get("_toast_shown", False):
+            st.session_state["_toast_shown"] = True
+            st.toast(
+                f"✅ Done! {counts['success']} carriers found out of {len(results_df)} processed.",
+                icon="🚛",
+            )
+    
+        # ── Compute summary numbers ────────────────────────────────────────────────
+        status_series  = results_df["Carrier_Status"].str.upper()
+        n_active       = int((status_series == "ACTIVE").sum())
+        n_oos          = int((status_series == "OUT_OF_SERVICE").sum())
+        n_inactive     = int((status_series == "INACTIVE").sum())
+        n_total        = len(results_df)
+        n_success      = counts["success"]
+        n_not_found    = counts["not_found"]
+        success_rate   = round(n_success / n_total * 100, 1) if n_total else 0
+    
+        elapsed_sec = st.session_state.get("scrape_elapsed")
+        if elapsed_sec:
+            elapsed_min = int(elapsed_sec // 60)
+            elapsed_s   = int(elapsed_sec % 60)
+            time_str    = f"{elapsed_min}m {elapsed_s}s" if elapsed_min else f"{elapsed_s}s"
+        else:
+            time_str = ""
+    
+        # ── Rich summary banner ────────────────────────────────────────────────────
+        pills_html = (
+            f'<span class="sum-pill sum-pill-rate">📊 {success_rate}% success rate</span>'
+            f'<span class="sum-pill sum-pill-active">🟢 {n_active} Active</span>'
+            f'<span class="sum-pill sum-pill-oos">🔴 {n_oos} Out of Service</span>'
+            f'<span class="sum-pill sum-pill-inactive">🟡 {n_inactive} Inactive</span>'
+            f'<span class="sum-pill sum-pill-notfound">⚫ {n_not_found} Not Found</span>'
+            + (f'<span class="sum-pill sum-pill-time">⏱ {time_str}</span>' if time_str else "")
+        )
+        st.markdown(
+            f'<div class="sum-banner">'
+            f'  <div class="sum-banner-top">✅ Scraping Complete — {n_success} carriers found out of {n_total}</div>'
+            f'  <div class="sum-banner-pills">{pills_html}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    
+        # Summary metrics
+        _cards(
+            (len(results_df),         "Total Processed", "c-blue"),
+            (counts["success"],        "Success",         "c-green"),
+            (counts["not_found"],      "Not Found",       "c-yellow"),
+            (counts["failed"],         "Failed",          "c-red"),
+            (counts["blocked"],        "Blocked",         "c-purple"),
+        )
+    
+        # counter animation JS removed (components.html deprecated)
+    
+        # ── Active Only filter toggle ──────────────────────────────────────────────
+        def _carrier_badge(status: str) -> str:
+            s = status.upper()
+            if s == "ACTIVE":            return "🟢 Active"
+            if s == "OUT_OF_SERVICE":    return "🔴 Out of Service"
+            if s == "INACTIVE":          return "🟡 Inactive"
+            return "⚫ —"
+    
+        # ── Pie chart: status distribution ────────────────────────────────────────
+        status_counts = results_df["Carrier_Status"].str.upper().value_counts().reset_index()
+        status_counts.columns = ["Status", "Count"]
+        color_map = {"ACTIVE": "#22c55e", "INACTIVE": "#f59e0b", "OUT_OF_SERVICE": "#ef4444", "UNKNOWN": "#94a3b8"}
+        pie_fig = px.pie(
+            status_counts, names="Status", values="Count",
+            color="Status", color_discrete_map=color_map,
+            title="Carrier Status Distribution",
+            hole=0.45,
+        )
+        pie_fig.update_traces(textposition="inside", textinfo="percent+label")
+        pie_fig.update_layout(
+            margin=dict(t=40, b=0, l=0, r=0),
+            height=280,
+            showlegend=False,
+            title_font_size=13,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#f1f5f9",
+        )
+        pie_col, _ = st.columns([2, 3])
+        pie_col.plotly_chart(pie_fig, use_container_width=True)
+    
+        # ── Status filter ──────────────────────────────────────────────────────────
+        f_col, _ = st.columns([3, 5])
+        status_filter = f_col.selectbox(
+            "Filter by status",
+            ["ALL", "ACTIVE", "INACTIVE", "OUT_OF_SERVICE"],
+            index=0,
+            label_visibility="collapsed",
+        )
+    
+        # ── Risk Scorecard summary row ─────────────────────────────────────────────
+        risk_data = [_compute_risk_score(r) for r in rows]
+        n_safe      = sum(1 for _, l in risk_data if l == "safe")
+        n_caution   = sum(1 for _, l in risk_data if l == "caution")
+        n_high_risk = sum(1 for _, l in risk_data if l == "high_risk")
+        avg_score   = int(sum(s for s, _ in risk_data) / len(risk_data)) if risk_data else 0
 
-    if new_col.button("🆕  New Session", use_container_width=True, key="btn_new"):
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-        _clear_progress_file()
-        st.rerun()
+        st.markdown(
+            f'<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 18px;">'
+            f'<div style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;'
+            f'padding:10px 18px;text-align:center;min-width:110px;">'
+            f'<div style="font-size:1.4rem;font-weight:800;color:#15803d">{n_safe}</div>'
+            f'<div style="font-size:.75rem;color:#166534">🟢 Safe</div></div>'
+            f'<div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;'
+            f'padding:10px 18px;text-align:center;min-width:110px;">'
+            f'<div style="font-size:1.4rem;font-weight:800;color:#92400e">{n_caution}</div>'
+            f'<div style="font-size:.75rem;color:#78350f">🟡 Caution</div></div>'
+            f'<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;'
+            f'padding:10px 18px;text-align:center;min-width:110px;">'
+            f'<div style="font-size:1.4rem;font-weight:800;color:#b91c1c">{n_high_risk}</div>'
+            f'<div style="font-size:.75rem;color:#991b1b">🔴 High Risk</div></div>'
+            f'<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;'
+            f'padding:10px 18px;text-align:center;min-width:110px;">'
+            f'<div style="font-size:1.4rem;font-weight:800;color:#1d4ed8">{avg_score}</div>'
+            f'<div style="font-size:.75rem;color:#1e40af">Avg Score</div></div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
-    # Excel sheet description
-    st.markdown(
-        '<div class="info-box">'
-        'Excel contains 4 sheets: '
-        '<b>All_Results</b> (all carriers + all data columns), '
-        '<b>Failed_Records</b> (non-success rows for follow-up), '
-        '<b>Summary</b> (run statistics), '
-        '<b>Duplicates</b> (removed duplicate IDs).'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+        # Build preview dataframe with badge + risk + flags columns
+        preview_cols = [
+            "Input_ID", "Scrape_Status", "Carrier_Status",
+            "Legal_Name", "DBA_Name", "USDOT_Number", "MC_Number",
+            "Physical_Address", "Phone",
+            "Safety_Rating", "OOS_Percentage",
+            "Power_Units", "Drivers",
+            "Total_Crashes",
+        ]
+        preview_df = results_df[[c for c in preview_cols if c in results_df.columns]].copy()
+        preview_df.insert(2, "Status_Badge",
+                          preview_df["Carrier_Status"].apply(_carrier_badge))
 
-# ─────────────────────────────────────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="site-footer">
-  <div class="footer-top">
-    <div class="footer-brand">
-      <span style="font-size:1.6rem">🚛</span>
-      <div>
-        <div class="footer-brand-name">Dispatch DOS</div>
-        <div class="footer-brand-tag">FMCSA Bulk Carrier Lookup Tool</div>
+        # Add Risk Score + Authority Flags columns (only for successfully scraped rows)
+        def _safe_risk_badge(r: dict) -> str:
+            if str(r.get("Scrape_Status", "")).lower() != "success":
+                return "—"
+            s, l = _compute_risk_score(r)
+            return _risk_badge(s, l)
+
+        def _safe_auth_flags(r: dict) -> str:
+            if str(r.get("Scrape_Status", "")).lower() != "success":
+                return "—"
+            return _authority_flags(r)
+
+        preview_df["Risk_Score"] = [_safe_risk_badge(r) for r in rows]
+        preview_df["Auth_Flags"] = [_safe_auth_flags(r) for r in rows]
+
+        if status_filter != "ALL":
+            preview_df = preview_df[preview_df["Carrier_Status"].str.upper() == status_filter]
+            st.caption(f"Showing {len(preview_df)} {status_filter} carriers out of {len(results_df)} total.")
+
+        # Row color: red override for flagged carriers, else status color
+        def _style_row(row: pd.Series):
+            flags = str(row.get("Auth_Flags", ""))
+            if flags not in ("Clear", "—", ""):
+                return ["background-color:#fff1f2; color:#881337"] * len(row)
+            s = str(row.get("Carrier_Status", "")).upper()
+            if s == "ACTIVE":
+                return ["background-color:#dcfce7; color:#15803d"] * len(row)
+            if s == "OUT_OF_SERVICE":
+                return ["background-color:#fee2e2; color:#b91c1c"] * len(row)
+            if s == "INACTIVE":
+                return ["background-color:#fef9c3; color:#92400e"] * len(row)
+            return [""] * len(row)
+
+        styled_df = preview_df.style.apply(_style_row, axis=1)
+
+        st.dataframe(
+            styled_df, use_container_width=True, height=380, hide_index=True,
+            column_config={
+                "Input_ID":       st.column_config.TextColumn("Input ID",      width="small"),
+                "Scrape_Status":  st.column_config.TextColumn("Scrape",        width="small"),
+                "Status_Badge":   st.column_config.TextColumn("Status",        width="medium"),
+                "Carrier_Status": None,
+                "Risk_Score":     st.column_config.TextColumn("Risk Score",    width="medium"),
+                "Auth_Flags":     st.column_config.TextColumn("Auth Alert",    width="medium"),
+                "Legal_Name":     st.column_config.TextColumn("Legal Name",    width="large"),
+                "DBA_Name":       st.column_config.TextColumn("DBA",           width="medium"),
+                "USDOT_Number":   st.column_config.TextColumn("USDOT",         width="small"),
+                "MC_Number":      st.column_config.TextColumn("MC #",          width="small"),
+                "Physical_Address": st.column_config.TextColumn("Address",     width="large"),
+                "Phone":          st.column_config.TextColumn("Phone",         width="small"),
+                "Safety_Rating":  st.column_config.TextColumn("Safety Rating", width="medium"),
+                "OOS_Percentage": st.column_config.TextColumn("OOS %",         width="small"),
+                "Power_Units":    st.column_config.TextColumn("Units",         width="small"),
+                "Drivers":        st.column_config.TextColumn("Drivers",       width="small"),
+                "Total_Crashes":  st.column_config.TextColumn("Crashes",       width="small"),
+            },
+        )
+    
+        # Failed records expander
+        failed_df = results_df[results_df["Scrape_Status"].isin(_FAILED_STATUSES)]
+        if not failed_df.empty:
+            with st.expander(f"⚠️  {len(failed_df)} records need attention"):
+                st.dataframe(
+                    failed_df[["Input_ID", "Scrape_Status", "Error_Detail"]],
+                    use_container_width=True, height=200, hide_index=True,
+                )
+    
+        # ── Action buttons ────────────────────────────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        dl_col, active_col, pdf_col, retry_col, new_col = st.columns([3, 3, 3, 2, 2])
+    
+        ts = datetime.now().strftime("%Y-%m-%d")
+        filename = f"DispatchDOS_FMCSA_{ts}.xlsx"
+    
+        # Build Excel if not already built (e.g. after a stop)
+        if st.session_state.output_bytes is None and rows:
+            st.session_state.output_bytes = _build_excel(
+                rows, st.session_state.dupes_removed, _current_settings
+            )
+    
+        if st.session_state.output_bytes:
+            dl_col.download_button(
+                "⬇️  Download All (Excel)",
+                data=st.session_state.output_bytes,
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True,
+            )
+    
+        # Download Active Only as CSV
+        active_rows = [r for r in rows
+                       if str(r.get("Carrier_Status", "")).upper() == "ACTIVE"]
+        if active_rows:
+            active_df = pd.DataFrame(active_rows)
+            active_csv = active_df.to_csv(index=False).encode("utf-8")
+            active_col.download_button(
+                f"🟢  Active Only ({len(active_rows)})",
+                data=active_csv,
+                file_name=f"DispatchDOS_Active_{ts}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+    
+        # PDF Report button
+        try:
+            from fpdf import FPDF as _FPDF  # noqa: F401 — check availability
+            _pdf_ok = True
+        except ImportError:
+            _pdf_ok = False
+
+        if _pdf_ok:
+            if "pdf_bytes_cache" not in st.session_state:
+                st.session_state.pdf_bytes_cache = None
+            # Show download button if already generated, else show generate button
+            if st.session_state.pdf_bytes_cache:
+                pdf_col.download_button(
+                    "📄  Download PDF",
+                    data=st.session_state.pdf_bytes_cache,
+                    file_name=f"DispatchDOS_Report_{ts}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_pdf",
+                )
+            else:
+                if pdf_col.button(
+                    "📄  PDF Report",
+                    use_container_width=True,
+                    key="btn_pdf",
+                ):
+                    with st.spinner("PDF generating..."):
+                        st.session_state.pdf_bytes_cache = _generate_pdf_report(rows)
+                    st.rerun()
+        else:
+            pdf_col.caption("PDF: `pip install fpdf2`")
+
+        if retry_col.button(
+            "🔄  Retry Failed",
+            use_container_width=True,
+            disabled=failed_df.empty,
+            key="btn_retry",
+        ):
+            retry_ids = failed_df["Input_ID"].tolist()
+            unique, dupes, total_in = _process_input(retry_ids)
+            st.session_state.carrier_ids    = unique
+            st.session_state.dupes_removed  = dupes
+            st.session_state.total_input    = total_in
+            st.session_state.total_unique   = len(unique)
+            st.session_state.results_rows   = []
+            st.session_state.output_bytes   = None
+            st.session_state.counts         = {"success": 0, "not_found": 0,
+                                                "failed": 0, "blocked": 0}
+            st.session_state.log_lines      = []
+            st.rerun()
+    
+        if new_col.button("🆕  New Session", use_container_width=True, key="btn_new"):
+            for k in list(st.session_state.keys()):
+                del st.session_state[k]
+            _clear_progress_file()
+            st.rerun()
+    
+        # Excel sheet description
+        st.markdown(
+            '<div class="info-box">'
+            'Excel contains 4 sheets: '
+            '<b>All_Results</b> (all carriers + all data columns), '
+            '<b>Failed_Records</b> (non-success rows for follow-up), '
+            '<b>Summary</b> (run statistics), '
+            '<b>Duplicates</b> (removed duplicate IDs).'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    
+    # ─────────────────────────────────────────────────────────────────────────────
+    # FOOTER
+    # ─────────────────────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="site-footer">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <span style="font-size:1.6rem">🚛</span>
+          <div>
+            <div class="footer-brand-name">Dispatch DOS</div>
+            <div class="footer-brand-tag">FMCSA Bulk Carrier Lookup Tool</div>
+          </div>
+        </div>
+        <div class="footer-links">
+          <a class="footer-link"
+             href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx"
+             target="_blank">🔗 FMCSA Website</a>
+          <a class="footer-link"
+             href="https://li.fmcsa.dot.gov/liview/pkg_web_key.pkg_add_update_webkey?pv_action=REGWEBKEY"
+             target="_blank">🔑 Get Free API Key</a>
+          <a class="footer-link"
+             href="https://github.com/Mohsinraza23/dispatch_Dos"
+             target="_blank">⭐ GitHub</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copy">
+          © 2026 Dispatch DOS · Data sourced from
+          <code style="color:#475569;font-size:.68rem">safer.fmcsa.dot.gov</code>
+          · Public government records
+        </div>
+        <div class="footer-badges">
+          <span class="footer-badge fb-public">✓ Public Data</span>
+          <span class="footer-badge fb-free">⚡ Free to Use</span>
+          <span class="footer-badge fb-secure">🔒 No Login</span>
+        </div>
       </div>
     </div>
-    <div class="footer-links">
-      <a class="footer-link"
-         href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx"
-         target="_blank">🔗 FMCSA Website</a>
-      <a class="footer-link"
-         href="https://li.fmcsa.dot.gov/liview/pkg_web_key.pkg_add_update_webkey?pv_action=REGWEBKEY"
-         target="_blank">🔑 Get Free API Key</a>
-      <a class="footer-link"
-         href="https://github.com/Mohsinraza23/dispatch_Dos"
-         target="_blank">⭐ GitHub</a>
-    </div>
-  </div>
-  <div class="footer-bottom">
-    <div class="footer-copy">
-      © 2026 Dispatch DOS · Data sourced from
-      <code style="color:#475569;font-size:.68rem">safer.fmcsa.dot.gov</code>
-      · Public government records
-    </div>
-    <div class="footer-badges">
-      <span class="footer-badge fb-public">✓ Public Data</span>
-      <span class="footer-badge fb-free">⚡ Free to Use</span>
-      <span class="footer-badge fb-secure">🔒 No Login</span>
-    </div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)

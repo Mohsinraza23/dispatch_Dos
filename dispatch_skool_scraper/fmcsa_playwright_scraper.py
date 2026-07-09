@@ -295,7 +295,7 @@ def scrape_usdot(page: Page, search_value: str, delay_min: float = 4.0,
 
     except PWTimeout:
         result["status"] = "error"
-        result["error_detail"] = f"Page timed out for USDOT {usdot_clean}"
+        result["error_detail"] = f"Page timed out for {search_clean}"
     except Exception as exc:
         result["status"] = "error"
         result["error_detail"] = str(exc)
