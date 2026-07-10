@@ -239,21 +239,23 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
 }
 
 /* ══════════════════════════════════════════════════════
-   METRIC CARDS
+   METRIC CARDS  — Glassmorphism
 ══════════════════════════════════════════════════════ */
 .mc-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 .mc-card {
     flex: 1; min-width: 110px;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px; padding: 16px 14px; text-align: center;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    background: rgba(255,255,255,0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.85);
+    border-radius: 16px; padding: 16px 14px; text-align: center;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    box-shadow: 0 4px 18px rgba(37,99,235,0.07), 0 1px 0 rgba(255,255,255,0.9) inset;
 }
 .mc-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-    border-color: #bfdbfe;
+    transform: translateY(-3px);
+    box-shadow: 0 12px 32px rgba(37,99,235,0.13), 0 1px 0 rgba(255,255,255,0.9) inset;
+    border-color: rgba(147,197,253,0.7);
 }
 .mc-card .val { font-size: 2rem; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
 .mc-card .lbl {
@@ -680,12 +682,14 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 }
 .stat-card {
     flex: 1; min-width: 130px;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: rgba(255,255,255,0.75);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.88);
     border-radius: 16px;
     padding: 18px 16px;
     text-align: center;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.9) inset;
     transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
     position: relative; overflow: hidden;
 }
@@ -808,13 +812,15 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
     animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.12s both;
 }
 .howto-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: rgba(255,255,255,0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.85);
     border-radius: 14px;
     padding: 18px 16px 16px;
     position: relative;
     transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    box-shadow: 0 4px 16px rgba(37,99,235,0.06), 0 1px 0 rgba(255,255,255,0.9) inset;
 }
 .howto-card:hover {
     transform: translateY(-3px);
@@ -944,6 +950,122 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 .fb-public  { background: rgba(34,197,94,0.12);  color: #4ade80;  border: 1px solid rgba(34,197,94,0.2);  }
 .fb-free    { background: rgba(37,99,235,0.12);  color: #60a5fa;  border: 1px solid rgba(37,99,235,0.2);  }
 .fb-secure  { background: rgba(124,58,237,0.12); color: #a78bfa;  border: 1px solid rgba(124,58,237,0.2); }
+
+/* ══════════════════════════════════════════════════════
+   DARK MODE
+══════════════════════════════════════════════════════ */
+body.ds-dark, body.ds-dark .stApp {
+    background: #060d1f !important;
+}
+body.ds-dark section[data-testid="stMain"] {
+    background: #060d1f !important;
+}
+body.ds-dark .block-container {
+    background: #060d1f !important;
+}
+body.ds-dark .mc-card {
+    background: rgba(15,23,42,0.82) !important;
+    border-color: rgba(59,130,246,0.18) !important;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset !important;
+}
+body.ds-dark .mc-card .lbl { color: #475569 !important; }
+body.ds-dark .stat-card {
+    background: rgba(15,23,42,0.82) !important;
+    border-color: rgba(59,130,246,0.15) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+}
+body.ds-dark .stat-card .sc-lbl { color: #475569 !important; }
+body.ds-dark .stat-card .sc-sub { color: #334155 !important; }
+body.ds-dark .howto-card {
+    background: rgba(15,23,42,0.82) !important;
+    border-color: rgba(59,130,246,0.15) !important;
+}
+body.ds-dark .howto-title { color: #e2e8f0 !important; }
+body.ds-dark .howto-desc  { color: #475569 !important; }
+body.ds-dark details {
+    background: #0f172a !important;
+    border-color: rgba(59,130,246,0.15) !important;
+}
+body.ds-dark details > summary { color: #cbd5e1 !important; }
+body.ds-dark .info-box  { background: rgba(30,64,175,0.15) !important; color: #93c5fd !important; }
+body.ds-dark .warn-box  { background: rgba(146,64,14,0.15)  !important; color: #fcd34d !important; }
+body.ds-dark p, body.ds-dark span, body.ds-dark label,
+body.ds-dark h1, body.ds-dark h2, body.ds-dark h3 { color: #e2e8f0 !important; }
+body.ds-dark [data-testid="stMetric"] {
+    background: #0f172a !important;
+    border-color: rgba(59,130,246,0.15) !important;
+}
+body.ds-dark [data-testid="stMetricValue"] { color: #f1f5f9 !important; }
+body.ds-dark .stTextInput > div > div > input,
+body.ds-dark .stTextArea > div > div > textarea {
+    background: #0f172a !important;
+    border-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+body.ds-dark [data-baseweb="select"] > div {
+    background: #0f172a !important;
+    border-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+body.ds-dark [data-testid="stFileUploader"] {
+    background: rgba(30,41,59,0.6) !important;
+    border-color: rgba(59,130,246,0.3) !important;
+}
+body.ds-dark [data-testid="stDataFrame"] {
+    border-color: rgba(59,130,246,0.15) !important;
+}
+
+/* ══════════════════════════════════════════════════════
+   CUSTOM FLOATING TOAST
+══════════════════════════════════════════════════════ */
+.ds-toast-wrap {
+    position: fixed; bottom: 28px; right: 28px;
+    z-index: 99999; display: flex; flex-direction: column; gap: 10px;
+    pointer-events: none;
+}
+.ds-toast {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 20px; border-radius: 14px;
+    font-size: .88rem; font-weight: 600;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 1px 0 rgba(255,255,255,0.12) inset;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    min-width: 260px; max-width: 380px;
+    transform: translateX(120%);
+    transition: transform 0.38s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease;
+    opacity: 0; pointer-events: auto;
+}
+.ds-toast.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+.ds-toast.ds-toast-success {
+    background: rgba(5,150,105,0.92);
+    border: 1px solid rgba(52,211,153,0.4);
+    color: #ecfdf5;
+}
+.ds-toast.ds-toast-error {
+    background: rgba(185,28,28,0.92);
+    border: 1px solid rgba(252,165,165,0.4);
+    color: #fef2f2;
+}
+.ds-toast.ds-toast-info {
+    background: rgba(29,78,216,0.92);
+    border: 1px solid rgba(147,197,253,0.4);
+    color: #eff6ff;
+}
+.ds-toast .ds-toast-icon { font-size: 1.1rem; flex-shrink: 0; }
+.ds-toast .ds-toast-close {
+    margin-left: auto; cursor: pointer; opacity: 0.7;
+    font-size: 1rem; flex-shrink: 0;
+}
+.ds-toast .ds-toast-close:hover { opacity: 1; }
+
+/* Dark mode toggle pill */
+.dm-toggle-wrap {
+    display: flex; justify-content: flex-end;
+    margin-bottom: -10px; margin-top: -6px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1299,6 +1421,7 @@ def _init() -> None:
         "scrape_start_time": None,
         "scrape_elapsed":    None,  # total seconds when run finished
         "_toast_shown":      False, # show completion toast only once
+        "dark_mode":         False, # dark mode toggle
         # Resume support
         "_resume_existing_rows": [],  # rows from previous partial run (for resume)
     }
@@ -2013,6 +2136,35 @@ _current_settings: dict[str, Any] = {
 # ── MAIN CONTENT ─────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Dark Mode toggle + body class injection ──────────────────────────────────────
+_dm_col, _ = st.columns([1, 6])
+_dark = _dm_col.toggle("🌙 Dark", value=st.session_state.get("dark_mode", False), key="dark_mode")
+_dm_class = "ds-dark" if _dark else ""
+st.markdown(
+    f"""<script>
+    (function(){{
+        var b = window.parent.document.body;
+        b.classList.remove('ds-dark');
+        {'b.classList.add("ds-dark");' if _dark else ''}
+    }})();
+    </script>
+    <div id="ds-toast-wrap" class="ds-toast-wrap"></div>
+    <script>
+    window._dsToast = function(msg, type, icon){{
+        var wrap = window.parent.document.getElementById('ds-toast-wrap');
+        if(!wrap) return;
+        var t = window.parent.document.createElement('div');
+        t.className = 'ds-toast ds-toast-' + type;
+        t.innerHTML = '<span class="ds-toast-icon">' + icon + '</span><span>' + msg + '</span>'
+                    + '<span class="ds-toast-close" onclick="this.parentNode.remove()">✕</span>';
+        wrap.appendChild(t);
+        setTimeout(function(){{ t.classList.add('show'); }}, 30);
+        setTimeout(function(){{ t.classList.remove('show'); setTimeout(function(){{ t.remove(); }}, 350); }}, 4000);
+    }};
+    </script>""",
+    unsafe_allow_html=True,
+)
+
 # ── Tabs ────────────────────────────────────────────────────────────────────────
 _tab_fmcsa, _tab_ai = st.tabs(["🚛 FMCSA Scraper", "🤖 AI Scraper"])
 
@@ -2552,22 +2704,34 @@ with _tab_fmcsa:
             last = st.session_state.last_id
             eta_str = ""
             elapsed_str = ""
+            speed_str = ""
             start_t = st.session_state.scrape_start_time
             if start_t and cur > 0:
-                elapsed   = time.time() - start_t
-                avg_per   = elapsed / cur
-                remaining = avg_per * (total - cur)
+                elapsed     = time.time() - start_t
+                avg_per     = elapsed / cur
+                remaining   = avg_per * (total - cur)
+                speed       = round(cur / (elapsed / 60), 1) if elapsed > 0 else 0
                 elapsed_str = (f"{int(elapsed//60)}m {int(elapsed%60)}s"
                                if elapsed >= 60 else f"{int(elapsed)}s")
                 remain_min  = int(remaining // 60)
                 remain_sec  = int(remaining % 60)
-                eta_str     = (f"~{remain_min}m {remain_sec}s remaining"
-                               if remain_min > 0 else f"~{remain_sec}s remaining")
+                eta_str     = (f"~{remain_min}m {remain_sec}s left"
+                               if remain_min > 0 else f"~{remain_sec}s left")
+                speed_str   = f"{speed}/min"
+            pct_disp = f"{int(pct*100)}%"
             st.markdown(
-                f"**{cur} / {total}** scraped"
-                + (f"  ·  last: `{last}`" if last else "")
-                + (f"  ·  ⏱ elapsed: **{elapsed_str}**  ·  ETA: **{eta_str}**"
-                   if eta_str else ""),
+                f'<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;'
+                f'margin:6px 0 2px;font-size:.85rem;">'
+                f'<span style="font-weight:800;font-size:1.05rem;color:#0f172a">'
+                f'{cur}<span style="color:#94a3b8;font-weight:500"> / {total}</span></span>'
+                f'<span style="background:#eff6ff;color:#1d4ed8;border-radius:99px;'
+                f'padding:3px 12px;font-weight:700;font-size:.8rem">{pct_disp}</span>'
+                + (f'<span style="color:#059669;font-weight:600">⚡ {speed_str}</span>' if speed_str else "")
+                + (f'<span style="color:#7c3aed;font-weight:600">⏱ {elapsed_str}</span>' if elapsed_str else "")
+                + (f'<span style="color:#d97706;font-weight:600">🏁 {eta_str}</span>' if eta_str else "")
+                + (f'<span style="color:#64748b;font-size:.78rem">last: <code>{last}</code></span>' if last else "")
+                + '</div>',
+                unsafe_allow_html=True,
             )
     
             # Live counter cards
