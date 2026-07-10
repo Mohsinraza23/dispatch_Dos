@@ -2143,46 +2143,94 @@ _dark = _dm_col.toggle("🌙 Dark", value=st.session_state.get("dark_mode", Fals
 # Inject dark theme via a second <style> block — no JS needed
 if _dark:
     st.markdown("""<style>
-.stApp, section[data-testid="stMain"], .block-container {
-    background: #060d1f !important;
-}
+/* ── Dark Mode overrides ── */
+.stApp                              { background: #060d1f !important; }
+section[data-testid="stMain"]       { background: #060d1f !important; }
+.block-container                    { background: #060d1f !important; }
+
+/* Cards */
 .mc-card {
-    background: rgba(15,23,42,0.88) !important;
+    background: rgba(15,23,42,0.92) !important;
     border-color: rgba(59,130,246,0.18) !important;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.04) inset !important;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45) !important;
 }
-.mc-card .lbl { color: #475569 !important; }
+.mc-card .lbl { color: #64748b !important; }
+.mc-card .val { filter: brightness(1.1); }
 .stat-card {
-    background: rgba(15,23,42,0.88) !important;
+    background: rgba(15,23,42,0.92) !important;
     border-color: rgba(59,130,246,0.15) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
 }
-.stat-card .sc-lbl { color: #475569 !important; }
-.stat-card .sc-sub { color: #334155 !important; }
+.stat-card .sc-lbl { color: #64748b !important; }
+.stat-card .sc-sub { color: #475569 !important; }
 .howto-card {
-    background: rgba(15,23,42,0.88) !important;
+    background: rgba(15,23,42,0.92) !important;
     border-color: rgba(59,130,246,0.15) !important;
 }
 .howto-title { color: #e2e8f0 !important; }
-.howto-desc  { color: #475569 !important; }
+.howto-desc  { color: #64748b !important; }
+
+/* Expanders */
 details {
     background: #0f172a !important;
     border-color: rgba(59,130,246,0.15) !important;
 }
 details > summary { color: #cbd5e1 !important; }
+
+/* Info / warn boxes */
 .info-box { background: rgba(30,64,175,0.18) !important; color: #93c5fd !important; }
-.warn-box { background: rgba(146,64,14,0.18)  !important; color: #fcd34d !important; }
-p, span, label, div { color: #e2e8f0 !important; }
-h1, h2, h3 { color: #f1f5f9 !important; }
-[data-testid="stMetric"]      { background: #0f172a !important; border-color: rgba(59,130,246,0.15) !important; }
+.warn-box { background: rgba(120,53,15,0.25)  !important; color: #fcd34d !important; }
+.sec-head { background: rgba(37,99,235,0.12) !important; color: #93c5fd !important; }
+
+/* General text — scoped to block-container only, not colored elements */
+.block-container > div > div > div > p   { color: #cbd5e1 !important; }
+.block-container label                   { color: #94a3b8 !important; }
+.stMarkdown p                            { color: #cbd5e1 !important; }
+h1, h2, h3                              { color: #f1f5f9 !important; }
+.stCaption, .stCaption p                { color: #475569 !important; }
+
+/* Streamlit metric */
+[data-testid="stMetric"]      { background: #0f172a !important; border-color: rgba(59,130,246,0.2) !important; }
 [data-testid="stMetricValue"] { color: #f1f5f9 !important; }
+[data-testid="stMetricLabel"] { color: #64748b !important; }
+
+/* Inputs */
 .stTextInput > div > div > input,
 .stTextArea  > div > div > textarea {
-    background: #0f172a !important; border-color: #1e293b !important; color: #e2e8f0 !important;
+    background: #0f172a !important;
+    border-color: #1e293b !important;
+    color: #e2e8f0 !important;
 }
-[data-baseweb="select"] > div { background: #0f172a !important; border-color: #1e293b !important; color: #e2e8f0 !important; }
-[data-testid="stFileUploader"] { background: rgba(30,41,59,0.6) !important; border-color: rgba(59,130,246,0.3) !important; }
-[data-testid="stDataFrame"]    { border-color: rgba(59,130,246,0.15) !important; }
-.stCaption { color: #475569 !important; }
+.stTextInput > div > div > input:focus,
+.stTextArea  > div > div > textarea:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.18) !important;
+}
+
+/* Select / dropdown */
+[data-baseweb="select"] > div {
+    background: #0f172a !important;
+    border-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+[data-baseweb="menu"]    { background: #0f172a !important; }
+[data-baseweb="option"]  { background: #0f172a !important; color: #e2e8f0 !important; }
+
+/* File uploader */
+[data-testid="stFileUploader"] {
+    background: rgba(15,23,42,0.6) !important;
+    border-color: rgba(59,130,246,0.3) !important;
+}
+
+/* Dataframe */
+[data-testid="stDataFrame"] { border-color: rgba(59,130,246,0.15) !important; }
+
+/* Slider track */
+[data-baseweb="slider"] [role="slider"] { background: #3b82f6 !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar-track { background: #0f172a !important; }
+::-webkit-scrollbar-thumb { background: #1e293b !important; }
 </style>""", unsafe_allow_html=True)
 
 # ── Tabs ────────────────────────────────────────────────────────────────────────
