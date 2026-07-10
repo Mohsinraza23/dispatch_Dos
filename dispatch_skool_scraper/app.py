@@ -2799,7 +2799,101 @@ with _tab_fmcsa:
                 "Total_Crashes":  st.column_config.TextColumn("Crashes",       width="small"),
             },
         )
-    
+
+        # ── Carrier Comparison ────────────────────────────────────────────────────
+        _success_rows = [r for r in rows
+                         if str(r.get("Scrape_Status", "")).lower() == "success"]
+        if len(_success_rows) >= 2:
+            with st.expander("⚖️  Carrier Comparison — Select 2–5 carriers to compare side-by-side"):
+                _cmp_options = [
+                    f"{r.get('Legal_Name', r.get('Input_ID', '?'))[:40]}  |  USDOT: {r.get('USDOT_Number', '?')}"
+                    for r in _success_rows
+                ]
+                _cmp_selected = st.multiselect(
+                    "Choose carriers:",
+                    options=_cmp_options,
+                    max_selections=5,
+                    placeholder="Pick 2 to 5 carriers...",
+                    key="cmp_select",
+                )
+                if len(_cmp_selected) >= 2:
+                    _cmp_rows = [_success_rows[_cmp_options.index(s)] for s in _cmp_selected]
+                    _cmp_fields = [
+                        ("Legal Name",     "Legal_Name"),
+                        ("USDOT #",        "USDOT_Number"),
+                        ("MC #",           "MC_Number"),
+                        ("Status",         "Carrier_Status"),
+                        ("Safety Rating",  "Safety_Rating"),
+                        ("Risk Score",     "__risk__"),
+                        ("Auth Flags",     "__flags__"),
+                        ("OOS %",          "OOS_Percentage"),
+                        ("Power Units",    "Power_Units"),
+                        ("Drivers",        "Drivers"),
+                        ("Total Crashes",  "Total_Crashes"),
+                        ("Phone",          "Phone"),
+                        ("Address",        "Physical_Address"),
+                        ("Entity Type",    "Entity_Type"),
+                        ("Operation Type", "Operation_Classification"),
+                    ]
+                    _cmp_data: dict = {"Field": [f[0] for f in _cmp_fields]}
+                    for _cr in _cmp_rows:
+                        _col_name = str(_cr.get("Legal_Name", _cr.get("Input_ID", "?")))[:22]
+                        _vals = []
+                        for _, _key in _cmp_fields:
+                            if _key == "__risk__":
+                                _s, _l = _compute_risk_score(_cr)
+                                _vals.append(f"{_s}/100  ({_l.replace('_',' ').title()})")
+                            elif _key == "__flags__":
+                                _vals.append(_authority_flags(_cr))
+                            else:
+                                _vals.append(str(_cr.get(_key, "—")))
+                        _cmp_data[_col_name] = _vals
+                    _cmp_df = pd.DataFrame(_cmp_data)
+
+                    # Highlight Risk Score and Auth Flags rows
+                    def _style_cmp(row: pd.Series):
+                        if row["Field"] == "Risk Score":
+                            return ["font-weight:bold; background:#eff6ff"] * len(row)
+                        if row["Field"] == "Auth Flags":
+                            return ["font-weight:bold; background:#fff7ed"] * len(row)
+                        if row["Field"] == "Status":
+                            return ["background:#f0fdf4"] * len(row)
+                        return [""] * len(row)
+
+                    st.dataframe(
+                        _cmp_df.style.apply(_style_cmp, axis=1),
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(60 + len(_cmp_fields) * 36, 600),
+                    )
+
+                    # Comparison PDF download
+                    try:
+                        from fpdf import FPDF as _FPDF2  # noqa: F401
+                        _cmp_pdf_key = "cmp_pdf_cache_" + "_".join(
+                            str(r.get("USDOT_Number", "")) for r in _cmp_rows
+                        )
+                        if _cmp_pdf_key not in st.session_state:
+                            st.session_state[_cmp_pdf_key] = None
+                        _cc1, _cc2 = st.columns([2, 5])
+                        if st.session_state[_cmp_pdf_key]:
+                            _cc1.download_button(
+                                "📄  Download Comparison PDF",
+                                data=st.session_state[_cmp_pdf_key],
+                                file_name=f"DispatchDOS_Compare_{ts}.pdf",
+                                mime="application/pdf",
+                                key="dl_cmp_pdf",
+                            )
+                        else:
+                            if _cc1.button("📄  Export Comparison PDF", key="btn_cmp_pdf"):
+                                with st.spinner("Building comparison PDF..."):
+                                    st.session_state[_cmp_pdf_key] = _generate_pdf_report(_cmp_rows)
+                                st.rerun()
+                    except ImportError:
+                        pass
+                elif len(_cmp_selected) == 1:
+                    st.info("Select at least one more carrier to compare.")
+
         # Failed records expander
         failed_df = results_df[results_df["Scrape_Status"].isin(_FAILED_STATUSES)]
         if not failed_df.empty:
@@ -2856,23 +2950,24 @@ with _tab_fmcsa:
         if _pdf_ok:
             if "pdf_bytes_cache" not in st.session_state:
                 st.session_state.pdf_bytes_cache = None
-            # Show download button if already generated, else show generate button
+            _n_pdf = len([r for r in rows
+                          if str(r.get("Scrape_Status", "")).lower() == "success"])
             if st.session_state.pdf_bytes_cache:
                 pdf_col.download_button(
-                    "📄  Download PDF",
+                    f"📄  Download Bulk PDF ({_n_pdf})",
                     data=st.session_state.pdf_bytes_cache,
-                    file_name=f"DispatchDOS_Report_{ts}.pdf",
+                    file_name=f"DispatchDOS_BulkReport_{ts}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
                     key="dl_pdf",
                 )
             else:
                 if pdf_col.button(
-                    "📄  PDF Report",
+                    f"📄  Bulk PDF ({_n_pdf})",
                     use_container_width=True,
                     key="btn_pdf",
                 ):
-                    with st.spinner("PDF generating..."):
+                    with st.spinner(f"Generating PDF for {_n_pdf} carriers..."):
                         st.session_state.pdf_bytes_cache = _generate_pdf_report(rows)
                     st.rerun()
         else:
