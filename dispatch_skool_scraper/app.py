@@ -219,92 +219,42 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
 }
 
 /* ══════════════════════════════════════════════════════
-   PHASE 3 — HERO BANNER (redesigned)
+   OPTION A — SLIM HERO TOPBAR
 ══════════════════════════════════════════════════════ */
-.ds-header {
-    background: linear-gradient(135deg, #0a0f1e 0%, #0f1f3d 45%, #0d1a38 100%);
+.ds-header-slim {
+    background: linear-gradient(135deg, #0a0f1e 0%, #0f1f3d 100%);
     border: 1px solid rgba(59,130,246,0.22);
-    border-radius: 22px;
-    padding: 36px 40px 32px;
-    margin-bottom: 28px;
-    position: relative; overflow: hidden;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.35), 0 1px 0 rgba(59,130,246,0.15) inset;
-    animation: fadeInUp 0.55s cubic-bezier(0.22,1,0.36,1) both;
+    border-radius: 14px;
+    padding: 11px 18px;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.28);
+    animation: fadeInUp 0.4s cubic-bezier(0.22,1,0.36,1) both;
 }
-/* dot-grid background */
-.ds-header::before {
-    content: "";
-    position: absolute; inset: 0;
-    background-image: radial-gradient(rgba(99,179,237,0.12) 1px, transparent 1px);
-    background-size: 22px 22px;
-    pointer-events: none;
-}
-/* glow orbs */
-.ds-header::after {
-    content: "";
-    position: absolute; top: -60px; right: -60px;
-    width: 320px; height: 320px;
-    background: radial-gradient(circle, rgba(59,130,246,0.22) 0%, transparent 65%);
-    pointer-events: none;
-}
-.ds-hero-inner {
-    position: relative; z-index: 1;
-    display: flex; align-items: flex-start;
-    gap: 22px; flex-wrap: wrap;
-}
-.ds-hero-left { flex: 1; min-width: 220px; }
-.ds-hero-right {
-    display: flex; flex-direction: column; gap: 8px;
-    align-items: flex-end; flex-shrink: 0;
-}
-.ds-header h1 {
-    font-size: 2rem; font-weight: 900; margin: 0 0 8px;
-    letter-spacing: -0.04em; line-height: 1.08;
-    background: linear-gradient(135deg, #ffffff 0%, #93c5fd 60%, #60a5fa 100%);
+.ds-header-slim h1 {
+    font-size: 1.05rem; font-weight: 900; margin: 0;
+    letter-spacing: -0.02em; white-space: nowrap;
+    background: linear-gradient(135deg, #ffffff 0%, #93c5fd 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     background-clip: text;
 }
-.ds-header p {
-    color: rgba(148,163,184,0.9); margin: 0 0 16px; font-size: .9rem; line-height: 1.6;
+.ds-slim-sep { color: rgba(148,163,184,0.3); font-size: 1rem; flex-shrink: 0; }
+.ds-slim-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.ds-slim-pill {
+    font-size: .58rem; font-weight: 700; padding: 3px 9px;
+    border-radius: 99px; background: rgba(255,255,255,0.07);
+    color: #93c5fd !important; border: 1px solid rgba(59,130,246,0.3);
+    text-transform: uppercase; letter-spacing: .7px; white-space: nowrap;
 }
-.ds-hero-badges { display: flex; gap: 8px; flex-wrap: wrap; }
-.ds-badge {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(255,255,255,0.07);
-    color: #93c5fd !important;
-    font-size: .65rem; font-weight: 700; padding: 5px 14px;
-    border-radius: 99px; letter-spacing: .8px; text-transform: uppercase;
-    white-space: nowrap; border: 1px solid rgba(59,130,246,0.3);
-    backdrop-filter: blur(8px);
-}
-.ds-badge-green {
+.ds-slim-pill.green {
     background: rgba(34,197,94,0.1) !important;
     color: #4ade80 !important;
     border-color: rgba(34,197,94,0.3) !important;
 }
-/* hero right — mini stat pills */
-.ds-hero-stat {
-    display: flex; align-items: center; gap: 10px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 12px; padding: 10px 16px;
-    backdrop-filter: blur(8px); min-width: 170px;
-}
-.ds-hero-stat-val {
-    font-size: 1.35rem; font-weight: 900; color: #60a5fa;
-    letter-spacing: -0.04em; line-height: 1;
-}
-.ds-hero-stat-lbl {
-    font-size: .7rem; color: #64748b; font-weight: 600;
-    text-transform: uppercase; letter-spacing: .8px; margin-top: 1px;
-}
-/* glow line under hero */
-.ds-hero-line {
-    height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(59,130,246,0.5), rgba(139,92,246,0.4), transparent);
-    border-radius: 99px; margin-top: 22px;
-    position: relative; z-index: 1;
-}
+.ds-slim-stats { margin-left: auto; display: flex; gap: 18px; flex-shrink: 0; }
+.ds-slim-stat { text-align: center; }
+.ds-slim-stat-val { font-size: .95rem; font-weight: 900; color: #60a5fa; line-height: 1; }
+.ds-slim-stat-lbl { font-size: .52rem; color: #64748b; text-transform: uppercase; letter-spacing: .6px; margin-top: 1px; }
 
 /* ══════════════════════════════════════════════════════
    PHASE 3 — SECTION HEADERS (redesigned)
@@ -863,7 +813,7 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 ══════════════════════════════════════════════════════ */
 .stepper {
     display: flex; align-items: flex-start; gap: 0;
-    margin: 0 0 28px;
+    margin: 0 0 14px;
     animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) 0.15s both;
 }
 .step-wrap {
@@ -2463,131 +2413,119 @@ with _tab_ai:
     render_ai_tab(groq_key=st.session_state.get("sb_groq_key", ""))
 
 with _tab_fmcsa:
-    # ── Hero Banner ───────────────────────────────────────────────────────────────
+    # ── Slim Hero Topbar ──────────────────────────────────────────────────────────
     st.markdown("""
-    <div class="ds-header">
-      <div class="ds-hero-inner">
-        <div class="ds-hero-left">
-          <h1>🚛 FMCSA Bulk Carrier Lookup</h1>
-          <p>Instantly scrape 30+ fields from the US government FMCSA database.<br>
-             Bulk lookup · Risk scoring · PDF reports · Excel export — all in one click.</p>
-          <div class="ds-hero-badges">
-            <span class="ds-badge">⚡ Dispatch DOS</span>
-            <span class="ds-badge ds-badge-green">✓ Live FMCSA Data</span>
-            <span class="ds-badge">🔒 Public Records</span>
-          </div>
+    <div class="ds-header-slim">
+      <h1>🚛 FMCSA Bulk Carrier Lookup</h1>
+      <span class="ds-slim-sep">|</span>
+      <div class="ds-slim-pills">
+        <span class="ds-slim-pill">⚡ Dispatch DOS</span>
+        <span class="ds-slim-pill green">✓ Live FMCSA Data</span>
+        <span class="ds-slim-pill">🔒 Public Records</span>
+      </div>
+      <div class="ds-slim-stats">
+        <div class="ds-slim-stat">
+          <div class="ds-slim-stat-val">5,000+</div>
+          <div class="ds-slim-stat-lbl">Carriers</div>
         </div>
-        <div class="ds-hero-right">
-          <div class="ds-hero-stat">
-            <div>
-              <div class="ds-hero-stat-val">5,000+</div>
-              <div class="ds-hero-stat-lbl">Carriers Per Run</div>
-            </div>
-          </div>
-          <div class="ds-hero-stat">
-            <div>
-              <div class="ds-hero-stat-val">30+</div>
-              <div class="ds-hero-stat-lbl">Data Fields</div>
-            </div>
-          </div>
-          <div class="ds-hero-stat">
-            <div>
-              <div class="ds-hero-stat-val">3-Tier</div>
-              <div class="ds-hero-stat-lbl">Scrape Engine</div>
-            </div>
-          </div>
+        <div class="ds-slim-stat">
+          <div class="ds-slim-stat-val">30+</div>
+          <div class="ds-slim-stat-lbl">Fields</div>
         </div>
-      </div>
-      <div class="ds-hero-line"></div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ── Feature Stats Bar ─────────────────────────────────────────────────────────
-    st.markdown("""
-    <div class="stats-bar">
-      <div class="stat-card sc-blue">
-        <span class="sc-icon">🚛</span>
-        <div class="sc-val">5000+</div>
-        <div class="sc-lbl">Carriers Per Run</div>
-        <div class="sc-sub">Bulk scrape in one go</div>
-      </div>
-      <div class="stat-card sc-green">
-        <span class="sc-icon">📊</span>
-        <div class="sc-val">30+</div>
-        <div class="sc-lbl">Data Fields</div>
-        <div class="sc-sub">Name · Address · Safety · Fleet</div>
-      </div>
-      <div class="stat-card sc-purple">
-        <span class="sc-icon">🛡️</span>
-        <div class="sc-val">Risk</div>
-        <div class="sc-lbl">Score + Flags</div>
-        <div class="sc-sub">Auto authority checks</div>
-      </div>
-      <div class="stat-card sc-orange">
-        <span class="sc-icon">📥</span>
-        <div class="sc-val">PDF</div>
-        <div class="sc-lbl">Bulk PDF + Excel</div>
-        <div class="sc-sub">4-sheet report, instant download</div>
+        <div class="ds-slim-stat">
+          <div class="ds-slim-stat-val">3-Tier</div>
+          <div class="ds-slim-stat-lbl">Engine</div>
+        </div>
       </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # ── How-to Guide Cards ────────────────────────────────────────────────────────
-    st.markdown("""
-    <div class="howto-grid">
-    
-      <div class="howto-card">
-        <div class="howto-num">1</div>
-        <span class="howto-icon">📋</span>
-        <div class="howto-title">Load Carrier List</div>
-        <div class="howto-desc">
-          Paste MC or USDOT numbers — one per line, or comma separated.
-          Or upload an <b>Excel / CSV</b> file directly.
+    # ── About / How-to (collapsed by default) ─────────────────────────────────────
+    with st.expander("ℹ️ About this tool — stats & how to use", expanded=False):
+        st.markdown("""
+        <div class="stats-bar">
+          <div class="stat-card sc-blue">
+            <span class="sc-icon">🚛</span>
+            <div class="sc-val">5000+</div>
+            <div class="sc-lbl">Carriers Per Run</div>
+            <div class="sc-sub">Bulk scrape in one go</div>
+          </div>
+          <div class="stat-card sc-green">
+            <span class="sc-icon">📊</span>
+            <div class="sc-val">30+</div>
+            <div class="sc-lbl">Data Fields</div>
+            <div class="sc-sub">Name · Address · Safety · Fleet</div>
+          </div>
+          <div class="stat-card sc-purple">
+            <span class="sc-icon">🛡️</span>
+            <div class="sc-val">Risk</div>
+            <div class="sc-lbl">Score + Flags</div>
+            <div class="sc-sub">Auto authority checks</div>
+          </div>
+          <div class="stat-card sc-orange">
+            <span class="sc-icon">📥</span>
+            <div class="sc-val">PDF</div>
+            <div class="sc-lbl">Bulk PDF + Excel</div>
+            <div class="sc-sub">4-sheet report, instant download</div>
+          </div>
         </div>
-      </div>
-    
-      <div class="howto-card">
-        <div class="howto-num">2</div>
-        <span class="howto-icon">🔍</span>
-        <div class="howto-title">Preview & Dedup</div>
-        <div class="howto-desc">
-          Tool auto-removes duplicates and shows a preview.
-          Review your list before scraping starts.
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="howto-grid">
+
+          <div class="howto-card">
+            <div class="howto-num">1</div>
+            <span class="howto-icon">📋</span>
+            <div class="howto-title">Load Carrier List</div>
+            <div class="howto-desc">
+              Paste MC or USDOT numbers — one per line, or comma separated.
+              Or upload an <b>Excel / CSV</b> file directly.
+            </div>
+          </div>
+
+          <div class="howto-card">
+            <div class="howto-num">2</div>
+            <span class="howto-icon">🔍</span>
+            <div class="howto-title">Preview & Dedup</div>
+            <div class="howto-desc">
+              Tool auto-removes duplicates and shows a preview.
+              Review your list before scraping starts.
+            </div>
+          </div>
+
+          <div class="howto-card">
+            <div class="howto-num">3</div>
+            <span class="howto-icon">🚀</span>
+            <div class="howto-title">Start Scraping</div>
+            <div class="howto-desc">
+              Click <b>▶ Start Scraping</b>. Watch live logs.
+              Hit <b>⏹ Stop</b> anytime — partial results are always saved.
+            </div>
+          </div>
+
+          <div class="howto-card">
+            <div class="howto-num">4</div>
+            <span class="howto-icon">📥</span>
+            <div class="howto-title">Download Report</div>
+            <div class="howto-desc">
+              Get a full <b>Excel report</b> (4 sheets) + Active Only <b>CSV</b>.
+              Filter by status before downloading.
+            </div>
+          </div>
+
         </div>
-      </div>
-    
-      <div class="howto-card">
-        <div class="howto-num">3</div>
-        <span class="howto-icon">🚀</span>
-        <div class="howto-title">Start Scraping</div>
-        <div class="howto-desc">
-          Click <b>▶ Start Scraping</b>. Watch live logs.
-          Hit <b>⏹ Stop</b> anytime — partial results are always saved.
+
+        <div class="howto-tip">
+          <div class="howto-tip-title">💡 Pro Tips</div>
+          <ul>
+            <li>Plain numbers (<code>1597181</code>) or prefixed (<code>MC193369</code>) — both work</li>
+            <li>Tool auto-detects USDOT vs MC and retries if not found</li>
+            <li>Add a free FMCSA API key (sidebar) to bypass IP blocking completely</li>
+            <li>Enable <b>Browser Fallback</b> in sidebar if you see many Blocked results</li>
+          </ul>
         </div>
-      </div>
-    
-      <div class="howto-card">
-        <div class="howto-num">4</div>
-        <span class="howto-icon">📥</span>
-        <div class="howto-title">Download Report</div>
-        <div class="howto-desc">
-          Get a full <b>Excel report</b> (4 sheets) + Active Only <b>CSV</b>.
-          Filter by status before downloading.
-        </div>
-      </div>
-    
-    </div>
-    
-    <div class="howto-tip">
-      <div class="howto-tip-title">💡 Pro Tips</div>
-      <ul>
-        <li>Plain numbers (<code>1597181</code>) or prefixed (<code>MC193369</code>) — both work</li>
-        <li>Tool auto-detects USDOT vs MC and retries if not found</li>
-        <li>Add a free FMCSA API key (sidebar) to bypass IP blocking completely</li>
-        <li>Enable <b>Browser Fallback</b> in sidebar if you see many Blocked results</li>
-      </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     
     # ── Visual Step Stepper ───────────────────────────────────────────────────────
@@ -2636,34 +2574,6 @@ with _tab_fmcsa:
     
     _render_stepper()
 
-    # ── Empty state — shown only when nothing has been loaded yet ─────────────────
-    if (not st.session_state.carrier_ids
-            and not st.session_state.is_scraping
-            and not st.session_state.results_rows):
-        st.markdown("""
-        <div class="empty-state">
-            <span class="empty-truck">🚛</span>
-            <h3>Ready to look up carriers</h3>
-            <p>Paste USDOT / MC numbers below to instantly scrape 30+ fields from FMCSA</p>
-            <div class="empty-steps">
-                <div class="empty-step">
-                    <div class="empty-step-num">1</div>
-                    <span class="empty-step-icon">📋</span>
-                    Paste carrier IDs<br>or upload Excel
-                </div>
-                <div class="empty-step">
-                    <div class="empty-step-num">2</div>
-                    <span class="empty-step-icon">🚀</span>
-                    Click Start<br>Scraping
-                </div>
-                <div class="empty-step">
-                    <div class="empty-step-num">3</div>
-                    <span class="empty-step-icon">📊</span>
-                    Download Excel<br>+ PDF Report
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
 
     # ─────────────────────────────────────────────────────────────────────────────
     # SECTION 1 — Input
