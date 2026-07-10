@@ -120,14 +120,42 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ══════════════════════════════════════════════════════
+   PHASE 3 — CSS VARIABLES (brand tokens)
+══════════════════════════════════════════════════════ */
+:root {
+    --brand-primary:   #2563eb;
+    --brand-dark:      #1d4ed8;
+    --brand-navy:      #0f172a;
+    --brand-navy-mid:  #1e293b;
+    --brand-success:   #059669;
+    --brand-warning:   #d97706;
+    --brand-danger:    #dc2626;
+    --brand-purple:    #7c3aed;
+    --surface:         #ffffff;
+    --surface-2:       #f8fafc;
+    --border:          #e2e8f0;
+    --text-primary:    #0f172a;
+    --text-secondary:  #64748b;
+    --text-muted:      #94a3b8;
+    --radius-sm:  8px;
+    --radius-md:  12px;
+    --radius-lg:  16px;
+    --radius-xl:  20px;
+    --shadow-sm:  0 1px 4px rgba(0,0,0,0.06);
+    --shadow-md:  0 4px 18px rgba(0,0,0,0.08);
+    --shadow-lg:  0 8px 32px rgba(0,0,0,0.12);
+    --transition: 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ══════════════════════════════════════════════════════
    BASE — Light Theme
 ══════════════════════════════════════════════════════ */
 html, body, [class*="css"] {
     font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
-    letter-spacing: -0.01em;
-    color: #0f172a !important;
+    letter-spacing: -0.015em;
+    color: var(--text-primary) !important;
 }
-.stApp { background: #f8fafc !important; }
+.stApp { background: var(--surface-2) !important; }
 /* Force main content to start after 64px sidebar */
 section[data-testid="stMain"] {
     margin-left: 64px !important;
@@ -191,51 +219,105 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
 }
 
 /* ══════════════════════════════════════════════════════
-   HEADER BANNER
+   PHASE 3 — HERO BANNER (redesigned)
 ══════════════════════════════════════════════════════ */
 .ds-header {
-    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 40%, #1e40af 100%);
-    border: none;
-    border-radius: 18px;
-    padding: 26px 32px;
+    background: linear-gradient(135deg, #0a0f1e 0%, #0f1f3d 45%, #0d1a38 100%);
+    border: 1px solid rgba(59,130,246,0.22);
+    border-radius: 22px;
+    padding: 36px 40px 32px;
     margin-bottom: 28px;
-    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-    box-shadow: 0 4px 24px rgba(37,99,235,0.3), 0 1px 0 rgba(255,255,255,0.1) inset;
     position: relative; overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35), 0 1px 0 rgba(59,130,246,0.15) inset;
+    animation: fadeInUp 0.55s cubic-bezier(0.22,1,0.36,1) both;
 }
+/* dot-grid background */
 .ds-header::before {
     content: "";
-    position: absolute; top: -80px; right: -40px;
-    width: 280px; height: 280px;
-    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 65%);
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(99,179,237,0.12) 1px, transparent 1px);
+    background-size: 22px 22px;
     pointer-events: none;
 }
-.ds-header h1 {
-    color: #ffffff; font-size: 1.75rem; font-weight: 800;
-    margin: 0; letter-spacing: -0.03em; line-height: 1.1;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+/* glow orbs */
+.ds-header::after {
+    content: "";
+    position: absolute; top: -60px; right: -60px;
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, rgba(59,130,246,0.22) 0%, transparent 65%);
+    pointer-events: none;
 }
-.ds-header p { color: rgba(255,255,255,0.75); margin: 5px 0 0; font-size: .88rem; }
+.ds-hero-inner {
+    position: relative; z-index: 1;
+    display: flex; align-items: flex-start;
+    gap: 22px; flex-wrap: wrap;
+}
+.ds-hero-left { flex: 1; min-width: 220px; }
+.ds-hero-right {
+    display: flex; flex-direction: column; gap: 8px;
+    align-items: flex-end; flex-shrink: 0;
+}
+.ds-header h1 {
+    font-size: 2rem; font-weight: 900; margin: 0 0 8px;
+    letter-spacing: -0.04em; line-height: 1.08;
+    background: linear-gradient(135deg, #ffffff 0%, #93c5fd 60%, #60a5fa 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.ds-header p {
+    color: rgba(148,163,184,0.9); margin: 0 0 16px; font-size: .9rem; line-height: 1.6;
+}
+.ds-hero-badges { display: flex; gap: 8px; flex-wrap: wrap; }
 .ds-badge {
-    background: rgba(255,255,255,0.2);
-    color: #fff !important;
-    font-size: .62rem; font-weight: 700; padding: 4px 14px;
-    border-radius: 99px; letter-spacing: 1px; text-transform: uppercase;
-    white-space: nowrap; border: 1px solid rgba(255,255,255,0.3);
-    backdrop-filter: blur(4px);
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(255,255,255,0.07);
+    color: #93c5fd !important;
+    font-size: .65rem; font-weight: 700; padding: 5px 14px;
+    border-radius: 99px; letter-spacing: .8px; text-transform: uppercase;
+    white-space: nowrap; border: 1px solid rgba(59,130,246,0.3);
+    backdrop-filter: blur(8px);
+}
+.ds-badge-green {
+    background: rgba(34,197,94,0.1) !important;
+    color: #4ade80 !important;
+    border-color: rgba(34,197,94,0.3) !important;
+}
+/* hero right — mini stat pills */
+.ds-hero-stat {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 10px 16px;
+    backdrop-filter: blur(8px); min-width: 170px;
+}
+.ds-hero-stat-val {
+    font-size: 1.35rem; font-weight: 900; color: #60a5fa;
+    letter-spacing: -0.04em; line-height: 1;
+}
+.ds-hero-stat-lbl {
+    font-size: .7rem; color: #64748b; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .8px; margin-top: 1px;
+}
+/* glow line under hero */
+.ds-hero-line {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(59,130,246,0.5), rgba(139,92,246,0.4), transparent);
+    border-radius: 99px; margin-top: 22px;
+    position: relative; z-index: 1;
 }
 
 /* ══════════════════════════════════════════════════════
-   SECTION HEADERS
+   PHASE 3 — SECTION HEADERS (redesigned)
 ══════════════════════════════════════════════════════ */
 .sec-head {
-    font-size: 1rem; font-weight: 700; color: #1e40af;
-    padding: 10px 14px;
-    background: linear-gradient(90deg, rgba(37,99,235,0.08) 0%, transparent 100%);
+    font-size: .9rem; font-weight: 800; color: #1e40af;
+    padding: 9px 14px 9px 42px;
+    background: linear-gradient(90deg, rgba(37,99,235,0.07) 0%, transparent 100%);
     border-left: 3px solid #2563eb;
-    border-radius: 0 8px 8px 0;
-    margin: 6px 0 20px;
+    border-radius: 0 10px 10px 0;
+    margin: 8px 0 20px;
     display: flex; align-items: center; gap: 8px;
+    position: relative; letter-spacing: .1px;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -504,21 +586,67 @@ h1, h2, h3 { color: #0f172a; font-weight: 700; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ══════════════════════════════════════════════════════
-   MOBILE RESPONSIVE
+   PHASE 3 — MOBILE RESPONSIVE (enhanced)
 ══════════════════════════════════════════════════════ */
-@media (max-width: 768px) {
-    .ds-header { padding: 18px 20px; gap: 12px; }
-    .ds-header h1 { font-size: 1.3rem; }
-    .ds-header p  { font-size: .8rem; }
-    .mc-card  { min-width: 85px; padding: 12px 10px; }
-    .mc-card .val { font-size: 1.5rem; }
-    .log-box  { height: 190px; }
-    .sec-head { font-size: .9rem; }
+@media (max-width: 900px) {
+    .ds-hero-right { display: none; }  /* hide stat pills on tablet */
+    .ds-header { padding: 26px 28px 22px; }
+    .ds-header h1 { font-size: 1.6rem; }
 }
-@media (max-width: 480px) {
-    .mc-card { flex: 1 1 calc(50% - 8px); min-width: 0; }
+@media (max-width: 768px) {
+    section[data-testid="stMain"] { margin-left: 0 !important; }
+    section[data-testid="stSidebar"] {
+        width: 0 !important; min-width: 0 !important;
+        opacity: 0; pointer-events: none;
+    }
+    .ds-header { padding: 20px 20px 18px; border-radius: 16px; }
+    .ds-header h1 { font-size: 1.3rem; }
+    .ds-header p  { font-size: .82rem; margin-bottom: 12px; }
+    .ds-hero-badges { gap: 6px; }
+    .ds-badge { font-size: .58rem; padding: 4px 10px; }
+
+    .mc-row { gap: 8px; }
+    .mc-card { min-width: 85px; padding: 12px 10px; }
+    .mc-card .val { font-size: 1.5rem; }
+
+    .stats-bar { gap: 8px; }
+    .stat-card { min-width: 120px; padding: 14px 12px; }
+    .stat-card .sc-val { font-size: 1.3rem; }
+
+    .howto-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .risk-rings-row { gap: 10px; }
+    .risk-ring-card { min-width: 100px; padding: 14px 8px 10px; }
+    .risk-ring-svg  { width: 64px; height: 64px; }
+
+    .log-box { height: 170px; }
+    .sec-head { font-size: .85rem; padding: 8px 12px 8px 36px; }
+
+    .stepper { gap: 0; }
+    .step-circle { width: 32px; height: 32px; font-size: .8rem; }
+    .step-label  { font-size: .62rem; }
+    .step-sub    { font-size: .56rem; }
+
+    .sum-banner { padding: 14px 16px; }
+    .sum-banner-pills { gap: 6px; }
+    .sum-pill { font-size: .7rem; padding: 4px 10px; }
+
+    .empty-state { padding: 28px 16px 36px; }
+    .empty-truck { font-size: 3rem; }
+    .empty-steps { gap: 8px; }
+    .empty-step  { min-width: 110px; padding: 12px 14px; font-size: .78rem; }
+
+    .site-footer { padding: 20px 20px 16px; border-radius: 14px; }
+    .footer-top  { flex-direction: column; gap: 12px; }
+}
+@media (max-width: 520px) {
+    .mc-card { flex: 1 1 calc(50% - 6px); min-width: 0; }
     .mc-card .val { font-size: 1.3rem; }
     .ds-header h1 { font-size: 1.1rem; }
+    .stat-card { flex: 1 1 calc(50% - 6px); min-width: 0; }
+    .risk-ring-card { flex: 1 1 calc(50% - 6px); min-width: 0; }
+    .howto-grid { grid-template-columns: 1fr; }
+    .empty-steps { flex-direction: column; align-items: center; }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -2335,18 +2463,44 @@ with _tab_ai:
     render_ai_tab(groq_key=st.session_state.get("sb_groq_key", ""))
 
 with _tab_fmcsa:
-    # ── Banner ────────────────────────────────────────────────────────────────────
-    st.markdown(
-        '<div class="ds-header">'
-        '<span style="font-size:3rem">🚛</span>'
-        '<div>'
-        '<h1>FMCSA Bulk Carrier Lookup</h1>'
-        '<p>Upload carrier list → deduplicate → scrape FMCSA → download enriched Excel</p>'
-        '</div>'
-        '<span class="ds-badge">Dispatch DOS</span>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    # ── Hero Banner ───────────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="ds-header">
+      <div class="ds-hero-inner">
+        <div class="ds-hero-left">
+          <h1>🚛 FMCSA Bulk Carrier Lookup</h1>
+          <p>Instantly scrape 30+ fields from the US government FMCSA database.<br>
+             Bulk lookup · Risk scoring · PDF reports · Excel export — all in one click.</p>
+          <div class="ds-hero-badges">
+            <span class="ds-badge">⚡ Dispatch DOS</span>
+            <span class="ds-badge ds-badge-green">✓ Live FMCSA Data</span>
+            <span class="ds-badge">🔒 Public Records</span>
+          </div>
+        </div>
+        <div class="ds-hero-right">
+          <div class="ds-hero-stat">
+            <div>
+              <div class="ds-hero-stat-val">5,000+</div>
+              <div class="ds-hero-stat-lbl">Carriers Per Run</div>
+            </div>
+          </div>
+          <div class="ds-hero-stat">
+            <div>
+              <div class="ds-hero-stat-val">30+</div>
+              <div class="ds-hero-stat-lbl">Data Fields</div>
+            </div>
+          </div>
+          <div class="ds-hero-stat">
+            <div>
+              <div class="ds-hero-stat-val">3-Tier</div>
+              <div class="ds-hero-stat-lbl">Scrape Engine</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ds-hero-line"></div>
+    </div>
+    """, unsafe_allow_html=True)
     
     # ── Feature Stats Bar ─────────────────────────────────────────────────────────
     st.markdown("""
@@ -2364,15 +2518,15 @@ with _tab_fmcsa:
         <div class="sc-sub">Name · Address · Safety · Fleet</div>
       </div>
       <div class="stat-card sc-purple">
-        <span class="sc-icon">⚡</span>
-        <div class="sc-val">Auto</div>
-        <div class="sc-lbl">Dedup + Detect</div>
-        <div class="sc-sub">MC / USDOT auto-detected</div>
+        <span class="sc-icon">🛡️</span>
+        <div class="sc-val">Risk</div>
+        <div class="sc-lbl">Score + Flags</div>
+        <div class="sc-sub">Auto authority checks</div>
       </div>
       <div class="stat-card sc-orange">
         <span class="sc-icon">📥</span>
-        <div class="sc-val">Free</div>
-        <div class="sc-lbl">Excel + CSV Export</div>
+        <div class="sc-val">PDF</div>
+        <div class="sc-lbl">Bulk PDF + Excel</div>
         <div class="sc-sub">4-sheet report, instant download</div>
       </div>
     </div>
