@@ -2136,34 +2136,54 @@ _current_settings: dict[str, Any] = {
 # ── MAIN CONTENT ─────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Dark Mode toggle + body class injection ──────────────────────────────────────
+# ── Dark Mode toggle ──────────────────────────────────────────────────────────────
 _dm_col, _ = st.columns([1, 6])
 _dark = _dm_col.toggle("🌙 Dark", value=st.session_state.get("dark_mode", False), key="dark_mode")
-_dm_class = "ds-dark" if _dark else ""
-st.markdown(
-    f"""<script>
-    (function(){{
-        var b = window.parent.document.body;
-        b.classList.remove('ds-dark');
-        {'b.classList.add("ds-dark");' if _dark else ''}
-    }})();
-    </script>
-    <div id="ds-toast-wrap" class="ds-toast-wrap"></div>
-    <script>
-    window._dsToast = function(msg, type, icon){{
-        var wrap = window.parent.document.getElementById('ds-toast-wrap');
-        if(!wrap) return;
-        var t = window.parent.document.createElement('div');
-        t.className = 'ds-toast ds-toast-' + type;
-        t.innerHTML = '<span class="ds-toast-icon">' + icon + '</span><span>' + msg + '</span>'
-                    + '<span class="ds-toast-close" onclick="this.parentNode.remove()">✕</span>';
-        wrap.appendChild(t);
-        setTimeout(function(){{ t.classList.add('show'); }}, 30);
-        setTimeout(function(){{ t.classList.remove('show'); setTimeout(function(){{ t.remove(); }}, 350); }}, 4000);
-    }};
-    </script>""",
-    unsafe_allow_html=True,
-)
+
+# Inject dark theme via a second <style> block — no JS needed
+if _dark:
+    st.markdown("""<style>
+.stApp, section[data-testid="stMain"], .block-container {
+    background: #060d1f !important;
+}
+.mc-card {
+    background: rgba(15,23,42,0.88) !important;
+    border-color: rgba(59,130,246,0.18) !important;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.04) inset !important;
+}
+.mc-card .lbl { color: #475569 !important; }
+.stat-card {
+    background: rgba(15,23,42,0.88) !important;
+    border-color: rgba(59,130,246,0.15) !important;
+}
+.stat-card .sc-lbl { color: #475569 !important; }
+.stat-card .sc-sub { color: #334155 !important; }
+.howto-card {
+    background: rgba(15,23,42,0.88) !important;
+    border-color: rgba(59,130,246,0.15) !important;
+}
+.howto-title { color: #e2e8f0 !important; }
+.howto-desc  { color: #475569 !important; }
+details {
+    background: #0f172a !important;
+    border-color: rgba(59,130,246,0.15) !important;
+}
+details > summary { color: #cbd5e1 !important; }
+.info-box { background: rgba(30,64,175,0.18) !important; color: #93c5fd !important; }
+.warn-box { background: rgba(146,64,14,0.18)  !important; color: #fcd34d !important; }
+p, span, label, div { color: #e2e8f0 !important; }
+h1, h2, h3 { color: #f1f5f9 !important; }
+[data-testid="stMetric"]      { background: #0f172a !important; border-color: rgba(59,130,246,0.15) !important; }
+[data-testid="stMetricValue"] { color: #f1f5f9 !important; }
+.stTextInput > div > div > input,
+.stTextArea  > div > div > textarea {
+    background: #0f172a !important; border-color: #1e293b !important; color: #e2e8f0 !important;
+}
+[data-baseweb="select"] > div { background: #0f172a !important; border-color: #1e293b !important; color: #e2e8f0 !important; }
+[data-testid="stFileUploader"] { background: rgba(30,41,59,0.6) !important; border-color: rgba(59,130,246,0.3) !important; }
+[data-testid="stDataFrame"]    { border-color: rgba(59,130,246,0.15) !important; }
+.stCaption { color: #475569 !important; }
+</style>""", unsafe_allow_html=True)
 
 # ── Tabs ────────────────────────────────────────────────────────────────────────
 _tab_fmcsa, _tab_ai = st.tabs(["🚛 FMCSA Scraper", "🤖 AI Scraper"])
