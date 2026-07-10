@@ -952,6 +952,101 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 .fb-secure  { background: rgba(124,58,237,0.12); color: #a78bfa;  border: 1px solid rgba(124,58,237,0.2); }
 
 /* ══════════════════════════════════════════════════════
+   PHASE 2 — RISK SCORE RING
+══════════════════════════════════════════════════════ */
+.risk-rings-row {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin: 14px 0 20px;
+    animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
+}
+.risk-ring-card {
+    flex: 1; min-width: 120px; max-width: 160px;
+    background: rgba(255,255,255,0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.85);
+    border-radius: 18px;
+    padding: 18px 12px 14px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+.risk-ring-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+.risk-ring-svg { width: 80px; height: 80px; margin: 0 auto 8px; display: block; }
+.risk-ring-bg  { fill: none; stroke: #e2e8f0; stroke-width: 3.5; }
+.risk-ring-arc { fill: none; stroke-width: 3.5; stroke-linecap: round;
+                 transform: rotate(-90deg); transform-origin: 50% 50%;
+                 transition: stroke-dasharray 0.8s cubic-bezier(0.34,1.56,0.64,1); }
+.risk-ring-num {
+    font-size: 1.25rem; font-weight: 800; letter-spacing: -0.04em;
+    line-height: 1; margin-bottom: 4px;
+}
+.risk-ring-lbl {
+    font-size: .65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: #94a3b8;
+}
+.risk-ring-sub {
+    font-size: .72rem; font-weight: 600; margin-top: 2px;
+}
+.rr-safe     .risk-ring-arc { stroke: #22c55e; }
+.rr-safe     .risk-ring-num { color: #15803d; }
+.rr-safe     .risk-ring-sub { color: #22c55e; }
+.rr-caution  .risk-ring-arc { stroke: #f59e0b; }
+.rr-caution  .risk-ring-num { color: #92400e; }
+.rr-caution  .risk-ring-sub { color: #f59e0b; }
+.rr-high     .risk-ring-arc { stroke: #ef4444; }
+.rr-high     .risk-ring-num { color: #b91c1c; }
+.rr-high     .risk-ring-sub { color: #ef4444; }
+.rr-avg      .risk-ring-arc { stroke: #2563eb; }
+.rr-avg      .risk-ring-num { color: #1d4ed8; }
+.rr-avg      .risk-ring-sub { color: #3b82f6; }
+
+/* ══════════════════════════════════════════════════════
+   PHASE 2 — EMPTY STATE
+══════════════════════════════════════════════════════ */
+.empty-state {
+    text-align: center;
+    padding: 48px 24px 56px;
+    animation: fadeInUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
+}
+.empty-truck {
+    font-size: 4rem; line-height: 1;
+    margin-bottom: 16px; display: block;
+    animation: truckBounce 2s cubic-bezier(0.36,0.07,0.19,0.97) infinite;
+}
+.empty-state h3 {
+    font-size: 1.3rem; font-weight: 800;
+    color: #0f172a; margin: 0 0 8px;
+}
+.empty-state p {
+    font-size: .9rem; color: #64748b; margin: 0 0 24px;
+}
+.empty-steps {
+    display: flex; gap: 12px; justify-content: center;
+    flex-wrap: wrap; margin-top: 12px;
+}
+.empty-step {
+    background: rgba(255,255,255,0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.85);
+    border-radius: 14px; padding: 14px 20px;
+    font-size: .82rem; font-weight: 600;
+    color: #1e293b; min-width: 140px;
+    box-shadow: 0 4px 16px rgba(37,99,235,0.07);
+}
+.empty-step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: linear-gradient(135deg,#1d4ed8,#3b82f6);
+    color: #fff; font-size: .72rem; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 8px;
+}
+.empty-step-icon { font-size: 1.2rem; margin-bottom: 6px; display: block; }
+
+/* ══════════════════════════════════════════════════════
    DARK MODE
 ══════════════════════════════════════════════════════ */
 body.ds-dark, body.ds-dark .stApp {
@@ -2386,12 +2481,40 @@ with _tab_fmcsa:
         st.markdown(html, unsafe_allow_html=True)
     
     _render_stepper()
-    
-    
+
+    # ── Empty state — shown only when nothing has been loaded yet ─────────────────
+    if (not st.session_state.carrier_ids
+            and not st.session_state.is_scraping
+            and not st.session_state.results_rows):
+        st.markdown("""
+        <div class="empty-state">
+            <span class="empty-truck">🚛</span>
+            <h3>Ready to look up carriers</h3>
+            <p>Paste USDOT / MC numbers below to instantly scrape 30+ fields from FMCSA</p>
+            <div class="empty-steps">
+                <div class="empty-step">
+                    <div class="empty-step-num">1</div>
+                    <span class="empty-step-icon">📋</span>
+                    Paste carrier IDs<br>or upload Excel
+                </div>
+                <div class="empty-step">
+                    <div class="empty-step-num">2</div>
+                    <span class="empty-step-icon">🚀</span>
+                    Click Start<br>Scraping
+                </div>
+                <div class="empty-step">
+                    <div class="empty-step-num">3</div>
+                    <span class="empty-step-icon">📊</span>
+                    Download Excel<br>+ PDF Report
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     # ─────────────────────────────────────────────────────────────────────────────
     # SECTION 1 — Input
     # ─────────────────────────────────────────────────────────────────────────────
-    
+
     st.markdown('<div class="sec-head">📂 Step 1 — Load Carrier List</div>',
                 unsafe_allow_html=True)
     
@@ -2900,29 +3023,112 @@ with _tab_fmcsa:
             if s == "INACTIVE":          return "🟡 Inactive"
             return "⚫ —"
     
-        # ── Pie chart: status distribution ────────────────────────────────────────
-        status_counts = results_df["Carrier_Status"].str.upper().value_counts().reset_index()
-        status_counts.columns = ["Status", "Count"]
-        color_map = {"ACTIVE": "#22c55e", "INACTIVE": "#f59e0b", "OUT_OF_SERVICE": "#ef4444", "UNKNOWN": "#94a3b8"}
-        pie_fig = px.pie(
-            status_counts, names="Status", values="Count",
-            color="Status", color_discrete_map=color_map,
-            title="Carrier Status Distribution",
-            hole=0.45,
+        # ── Charts row: Pie (status) + Bar (risk) ─────────────────────────────────
+        risk_data   = [_compute_risk_score(r) for r in rows]
+        n_safe      = sum(1 for _, l in risk_data if l == "safe")
+        n_caution   = sum(1 for _, l in risk_data if l == "caution")
+        n_high_risk = sum(1 for _, l in risk_data if l == "high_risk")
+        avg_score   = int(sum(s for s, _ in risk_data) / len(risk_data)) if risk_data else 0
+
+        _ch_pie, _ch_bar = st.columns(2)
+
+        # Pie — status distribution
+        with _ch_pie:
+            status_counts = results_df["Carrier_Status"].str.upper().value_counts().reset_index()
+            status_counts.columns = ["Status", "Count"]
+            _cmap = {"ACTIVE":"#22c55e","INACTIVE":"#f59e0b","OUT_OF_SERVICE":"#ef4444","UNKNOWN":"#94a3b8"}
+            pie_fig = px.pie(
+                status_counts, names="Status", values="Count",
+                color="Status", color_discrete_map=_cmap,
+                title="Carrier Status Distribution", hole=0.48,
+            )
+            pie_fig.update_traces(textposition="inside", textinfo="percent+label",
+                                  textfont_size=11)
+            pie_fig.update_layout(
+                margin=dict(t=44, b=8, l=0, r=0), height=300,
+                showlegend=True,
+                legend=dict(orientation="h", y=-0.08, font_size=10),
+                title_font_size=13, title_font_color="#0f172a",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(pie_fig, use_container_width=True)
+
+        # Bar — risk distribution
+        with _ch_bar:
+            bar_fig = px.bar(
+                x=["🟢 Safe", "🟡 Caution", "🔴 High Risk"],
+                y=[n_safe, n_caution, n_high_risk],
+                color=["🟢 Safe", "🟡 Caution", "🔴 High Risk"],
+                color_discrete_map={
+                    "🟢 Safe":"#22c55e","🟡 Caution":"#f59e0b","🔴 High Risk":"#ef4444"
+                },
+                title="Risk Score Distribution",
+                labels={"x":"Risk Level","y":"Carriers"},
+                text_auto=True,
+            )
+            bar_fig.update_traces(textposition="outside", textfont_size=12,
+                                  marker_line_width=0)
+            bar_fig.update_layout(
+                margin=dict(t=44, b=8, l=0, r=0), height=300,
+                showlegend=False,
+                title_font_size=13, title_font_color="#0f172a",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.06)"),
+            )
+            st.plotly_chart(bar_fig, use_container_width=True)
+
+        # ── Risk Score Ring Cards ─────────────────────────────────────────────────
+        def _ring_svg(score: int, color: str) -> str:
+            """SVG circular progress ring for a 0-100 score."""
+            pct   = max(0, min(100, score))
+            circ  = 2 * 3.14159 * 15.9   # circumference for r=15.9
+            dash  = round(circ * pct / 100, 2)
+            gap   = round(circ - dash, 2)
+            return (
+                f'<svg class="risk-ring-svg" viewBox="0 0 36 36">'
+                f'<circle class="risk-ring-bg" cx="18" cy="18" r="15.9"/>'
+                f'<circle class="risk-ring-arc" cx="18" cy="18" r="15.9" '
+                f'stroke="{color}" stroke-dasharray="{dash} {gap}"/>'
+                f'<text x="18" y="20.5" text-anchor="middle" '
+                f'font-size="8" font-weight="800" fill="{color}">{pct}</text>'
+                f'</svg>'
+            )
+
+        _safe_pct    = round(n_safe    / len(rows) * 100) if rows else 0
+        _caution_pct = round(n_caution / len(rows) * 100) if rows else 0
+        _high_pct    = round(n_high_risk / len(rows) * 100) if rows else 0
+
+        st.markdown(
+            f'<div class="risk-rings-row">'
+            f'<div class="risk-ring-card rr-safe">'
+            + _ring_svg(_safe_pct, "#22c55e") +
+            f'<div class="risk-ring-num">{n_safe}</div>'
+            f'<div class="risk-ring-lbl">Safe</div>'
+            f'<div class="risk-ring-sub">{_safe_pct}% of fleet</div>'
+            f'</div>'
+            f'<div class="risk-ring-card rr-caution">'
+            + _ring_svg(_caution_pct, "#f59e0b") +
+            f'<div class="risk-ring-num">{n_caution}</div>'
+            f'<div class="risk-ring-lbl">Caution</div>'
+            f'<div class="risk-ring-sub">{_caution_pct}% of fleet</div>'
+            f'</div>'
+            f'<div class="risk-ring-card rr-high">'
+            + _ring_svg(_high_pct, "#ef4444") +
+            f'<div class="risk-ring-num">{n_high_risk}</div>'
+            f'<div class="risk-ring-lbl">High Risk</div>'
+            f'<div class="risk-ring-sub">{_high_pct}% of fleet</div>'
+            f'</div>'
+            f'<div class="risk-ring-card rr-avg">'
+            + _ring_svg(avg_score, "#2563eb") +
+            f'<div class="risk-ring-num">{avg_score}</div>'
+            f'<div class="risk-ring-lbl">Avg Score</div>'
+            f'<div class="risk-ring-sub">out of 100</div>'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
         )
-        pie_fig.update_traces(textposition="inside", textinfo="percent+label")
-        pie_fig.update_layout(
-            margin=dict(t=40, b=0, l=0, r=0),
-            height=280,
-            showlegend=False,
-            title_font_size=13,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#f1f5f9",
-        )
-        pie_col, _ = st.columns([2, 3])
-        pie_col.plotly_chart(pie_fig, use_container_width=True)
-    
+
         # ── Status filter ──────────────────────────────────────────────────────────
         f_col, _ = st.columns([3, 5])
         status_filter = f_col.selectbox(
@@ -2930,35 +3136,6 @@ with _tab_fmcsa:
             ["ALL", "ACTIVE", "INACTIVE", "OUT_OF_SERVICE"],
             index=0,
             label_visibility="collapsed",
-        )
-    
-        # ── Risk Scorecard summary row ─────────────────────────────────────────────
-        risk_data = [_compute_risk_score(r) for r in rows]
-        n_safe      = sum(1 for _, l in risk_data if l == "safe")
-        n_caution   = sum(1 for _, l in risk_data if l == "caution")
-        n_high_risk = sum(1 for _, l in risk_data if l == "high_risk")
-        avg_score   = int(sum(s for s, _ in risk_data) / len(risk_data)) if risk_data else 0
-
-        st.markdown(
-            f'<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 18px;">'
-            f'<div style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;'
-            f'padding:10px 18px;text-align:center;min-width:110px;">'
-            f'<div style="font-size:1.4rem;font-weight:800;color:#15803d">{n_safe}</div>'
-            f'<div style="font-size:.75rem;color:#166534">🟢 Safe</div></div>'
-            f'<div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;'
-            f'padding:10px 18px;text-align:center;min-width:110px;">'
-            f'<div style="font-size:1.4rem;font-weight:800;color:#92400e">{n_caution}</div>'
-            f'<div style="font-size:.75rem;color:#78350f">🟡 Caution</div></div>'
-            f'<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;'
-            f'padding:10px 18px;text-align:center;min-width:110px;">'
-            f'<div style="font-size:1.4rem;font-weight:800;color:#b91c1c">{n_high_risk}</div>'
-            f'<div style="font-size:.75rem;color:#991b1b">🔴 High Risk</div></div>'
-            f'<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;'
-            f'padding:10px 18px;text-align:center;min-width:110px;">'
-            f'<div style="font-size:1.4rem;font-weight:800;color:#1d4ed8">{avg_score}</div>'
-            f'<div style="font-size:.75rem;color:#1e40af">Avg Score</div></div>'
-            f'</div>',
-            unsafe_allow_html=True,
         )
 
         # Build preview dataframe with badge + risk + flags columns
