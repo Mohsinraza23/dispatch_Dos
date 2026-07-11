@@ -289,13 +289,18 @@ def render_ai_tab(groq_key: str = "") -> None:
 
     # ── Header banner ─────────────────────────────────────────────────────────
     st.markdown(
-        '<div class="ds-header">'
-        '<span style="font-size:3rem">🤖</span>'
-        '<div>'
-        '<h1>AI Universal Scraper</h1>'
-        '<p>Kisi bhi website ka data — text ya audio mein batao, AI samjhega aur scrape karega</p>'
+        '<div class="ds-header-slim">'
+        '<h1>🤖 AI Universal Scraper</h1>'
+        '<span class="ds-slim-sep">|</span>'
+        '<div class="ds-slim-pills">'
+        '<span class="ds-slim-pill">⚡ Groq Powered</span>'
+        '<span class="ds-slim-pill green">✓ Any Website</span>'
+        '<span class="ds-slim-pill">🎤 99+ Languages</span>'
         '</div>'
-        '<span class="ds-badge">Powered by Groq · Free</span>'
+        '<div class="ds-slim-stats">'
+        '<div class="ds-slim-stat"><div class="ds-slim-stat-val">AI</div><div class="ds-slim-stat-lbl">Powered</div></div>'
+        '<div class="ds-slim-stat"><div class="ds-slim-stat-val">Any</div><div class="ds-slim-stat-lbl">Website</div></div>'
+        '</div>'
         '</div>',
         unsafe_allow_html=True,
     )

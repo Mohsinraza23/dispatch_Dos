@@ -3109,6 +3109,7 @@ with _tab_fmcsa:
     # ─────────────────────────────────────────────────────────────────────────────
     
     rows = st.session_state.results_rows
+    ts   = datetime.now().strftime("%Y-%m-%d")   # used in download filenames throughout section
     if rows:
         st.markdown('<hr class="div">', unsafe_allow_html=True)
         st.markdown('<div class="sec-head">✅ Step 4 — Results</div>',
@@ -3504,8 +3505,7 @@ with _tab_fmcsa:
         # ── Action buttons ────────────────────────────────────────────────────────
         st.markdown("<br>", unsafe_allow_html=True)
         dl_col, active_col, pdf_col, retry_col, new_col = st.columns([3, 3, 3, 2, 2])
-    
-        ts = datetime.now().strftime("%Y-%m-%d")
+
         filename = f"DispatchDOS_FMCSA_{ts}.xlsx"
     
         # Build Excel if not already built (e.g. after a stop)
