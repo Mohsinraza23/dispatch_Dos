@@ -3911,11 +3911,6 @@ with _tab_fmcsa:
         </div>
       </div>
       <div class="footer-bottom">
-        <div class="footer-copy">
-          © 2026 Dispatch DOS · Data sourced from
-          <code style="color:#475569;font-size:.68rem">safer.fmcsa.dot.gov</code>
-          · Public government records
-        </div>
         <div class="footer-badges">
           <span class="footer-badge fb-public">✓ Public Data</span>
           <span class="footer-badge fb-secure">🔒 No Login</span>

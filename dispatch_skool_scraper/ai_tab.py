@@ -578,9 +578,7 @@ def render_ai_tab(groq_key: str = "") -> None:
     # ── Footer note ───────────────────────────────────────────────────────────
     st.markdown(
         '<div style="text-align:center;color:#94a3b8;font-size:.75rem;margin-top:32px;">'
-        'AI powered by <b>Groq</b> (Whisper + Llama 3.3) · '
-        'FMCSA data from <code>safer.fmcsa.dot.gov</code> · '
-        'Free to use'
+        'AI powered by <b>Groq</b> (Whisper + Llama 3.3)'
         '</div>',
         unsafe_allow_html=True,
     )
