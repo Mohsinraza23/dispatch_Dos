@@ -2328,7 +2328,7 @@ with st.sidebar:
         if _sbtn_col.button("💾", key="btn_save_list", help="Save current list"):
             _name = _save_name.strip() or f"List {len(_all_lists) + 1}"
             _save_list(_name, st.session_state.carrier_ids)
-            st.success(f"Saved "{_name}"!", icon="✅")
+            st.success(f"Saved '{_name}'!", icon="✅")
             st.rerun()
     else:
         st.caption("Load carriers first to save a list.")
