@@ -3896,17 +3896,6 @@ with _tab_fmcsa:
             <div class="footer-brand-tag">Carrier Intelligence Platform</div>
           </div>
         </div>
-        <div class="footer-links">
-          <a class="footer-link"
-             href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx"
-             target="_blank">🔗 FMCSA Website</a>
-          <a class="footer-link"
-             href="https://li.fmcsa.dot.gov/liview/pkg_web_key.pkg_add_update_webkey?pv_action=REGWEBKEY"
-             target="_blank">🔑 Get Free API Key</a>
-          <a class="footer-link"
-             href="https://github.com/Mohsinraza23/dispatch_Dos"
-             target="_blank">⭐ GitHub</a>
-        </div>
       </div>
       <div class="footer-bottom">
         <div class="footer-badges">
