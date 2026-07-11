@@ -150,11 +150,12 @@ st.markdown("""
 /* ══════════════════════════════════════════════════════
    BASE — Light Theme
 ══════════════════════════════════════════════════════ */
-html, body, [class*="css"] {
+html, body {
     font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
     letter-spacing: -0.015em;
-    color: var(--text-primary) !important;
 }
+/* Apply font only — do NOT force text color globally */
+[class*="css"] { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important; }
 .stApp { background: var(--surface-2) !important; }
 /* Force main content to start after 64px sidebar */
 section[data-testid="stMain"] {
@@ -334,6 +335,50 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
 }
 
 /* ══════════════════════════════════════════════════════
+   CARRIER GRADE  (A / B / C / D / F)
+══════════════════════════════════════════════════════ */
+.grade-row {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin: 0 0 20px;
+    animation: fadeInUp 0.45s cubic-bezier(0.22,1,0.36,1) 0.1s both;
+}
+.grade-card {
+    flex: 1; min-width: 90px;
+    border-radius: 16px; padding: 14px 10px 12px;
+    text-align: center; border: 2px solid transparent;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    cursor: default;
+}
+.grade-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+.grade-letter {
+    font-size: 2.4rem; font-weight: 900; line-height: 1;
+    letter-spacing: -0.04em; display: block;
+}
+.grade-count {
+    font-size: 1.1rem; font-weight: 800; display: block;
+    margin-top: 4px; letter-spacing: -0.02em;
+}
+.grade-label {
+    font-size: .6rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; display: block; margin-top: 2px; opacity: .75;
+}
+/* Grade colors */
+.gc-a { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+.gc-b { background: #ecfdf5; border-color: #6ee7b7; color: #059669; }
+.gc-c { background: #fffbeb; border-color: #fcd34d; color: #b45309; }
+.gc-d { background: #fff7ed; border-color: #fdba74; color: #c2410c; }
+.gc-f { background: #fff1f2; border-color: #fca5a5; color: #be123c; }
+
+/* Grade badge in table */
+.gb { display:inline-block; font-weight:800; font-size:.82rem;
+      padding:2px 9px; border-radius:7px; letter-spacing:.3px; }
+.gb-a { background:#dcfce7; color:#15803d; }
+.gb-b { background:#d1fae5; color:#059669; }
+.gb-c { background:#fef9c3; color:#b45309; }
+.gb-d { background:#ffedd5; color:#c2410c; }
+.gb-f { background:#ffe4e6; color:#be123c; }
+
+/* ══════════════════════════════════════════════════════
    DIVIDER
 ══════════════════════════════════════════════════════ */
 .div { border: none; border-top: 1px solid #e2e8f0; margin: 28px 0; }
@@ -356,12 +401,22 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
     box-shadow: 0 6px 20px rgba(37,99,235,0.5) !important;
 }
 .stButton > button[kind="secondary"] {
-    border-color: #cbd5e1 !important;
-    background: #ffffff !important; color: #374151 !important;
+    border: 1.5px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #374151 !important;
 }
 .stButton > button[kind="secondary"]:hover {
     border-color: #2563eb !important;
-    background: #eff6ff !important; color: #1d4ed8 !important;
+    background: #eff6ff !important;
+    color: #1d4ed8 !important;
+}
+/* Make sure ALL button text is readable — override any inherited dark color */
+.stButton > button p,
+.stButton > button span,
+.stButton > button div,
+.stDownloadButton > button p,
+.stDownloadButton > button span {
+    color: inherit !important;
 }
 .stDownloadButton > button {
     border-radius: 10px !important; font-weight: 600 !important;
@@ -376,41 +431,40 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
 }
 
 /* ══════════════════════════════════════════════════════
-   TABS
+   TABS — Light Mode
 ══════════════════════════════════════════════════════ */
-/* Tab container — full width, dark pill bar */
 div[data-testid="stTabs"] {
     margin-top: 1.5rem !important;
     margin-bottom: 20px !important;
 }
 .stTabs [data-baseweb="tab-list"] {
     gap: 6px !important;
-    background: #0f172a !important;
-    padding: 6px 8px !important;
-    border-radius: 14px !important;
-    border: none !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
+    background: #f1f5f9 !important;
+    padding: 5px 6px !important;
+    border-radius: 12px !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
     width: fit-content !important;
 }
 .stTabs [data-baseweb="tab"] {
-    border-radius: 10px !important;
-    padding: 10px 26px !important;
+    border-radius: 9px !important;
+    padding: 9px 24px !important;
     font-weight: 700 !important;
-    font-size: 1rem !important;
-    color: #94a3b8 !important;
+    font-size: .95rem !important;
+    color: #64748b !important;
     transition: all 0.2s ease !important;
     border: none !important;
     background: transparent !important;
     letter-spacing: -0.01em !important;
 }
 .stTabs [data-baseweb="tab"]:hover {
-    color: #ffffff !important;
-    background: rgba(255,255,255,0.08) !important;
+    color: #2563eb !important;
+    background: #ffffff !important;
 }
 .stTabs [aria-selected="true"] {
     background: #2563eb !important;
     color: #ffffff !important;
-    box-shadow: 0 2px 12px rgba(37,99,235,0.4) !important;
+    box-shadow: 0 2px 10px rgba(37,99,235,0.3) !important;
 }
 /* Hide the bottom underline Streamlit adds */
 .stTabs [data-baseweb="tab-highlight"] { display: none !important; }
@@ -1316,6 +1370,25 @@ def _risk_badge(score: int, level: str) -> str:
     return f"🔴 High Risk ({score})"
 
 
+def _compute_grade(score: int) -> tuple[str, str, str]:
+    """
+    Convert 0-100 risk score to A-F letter grade.
+    Returns (letter, css_class, description).
+    """
+    if score >= 85: return ("A", "gc-a", "Excellent — Safe to use")
+    if score >= 70: return ("B", "gc-b", "Good — Minor concerns")
+    if score >= 50: return ("C", "gc-c", "Caution — Review before using")
+    if score >= 30: return ("D", "gc-d", "Poor — High risk")
+    return              ("F", "gc-f", "Avoid — Do not use")
+
+
+def _grade_badge(score: int) -> str:
+    """Return inline HTML badge for grade letter (for table display)."""
+    letter, cls, _ = _compute_grade(score)
+    tbl_cls = cls.replace("gc-", "gb-")
+    return f'<span class="gb {tbl_cls}">{letter}</span>'
+
+
 def _authority_flags(row: dict) -> str:
     """Return plain-text alert flags for dangerous carriers."""
     auth   = str(row.get("Operating_Authority_Status", "")).lower()
@@ -1363,16 +1436,22 @@ def _generate_pdf_report(rows: list[dict]) -> bytes:
         name = str(row.get("Legal_Name", "-"))[:60]
         pdf.cell(130, 8, name)
 
-        # Risk score box (top-right)
-        score, level = _compute_risk_score(row)
+        # Grade + Risk score box (top-right)
+        score, level   = _compute_risk_score(row)
+        grade_letter, grade_css, grade_desc = _compute_grade(score)
         risk_colors  = {"safe": (34, 197, 94), "caution": (245, 158, 11), "high_risk": (239, 68, 68)}
-        risk_labels  = {"safe": "SAFE", "caution": "CAUTION", "high_risk": "HIGH RISK"}
         r, g, b = risk_colors[level]
         pdf.set_fill_color(r, g, b)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.set_xy(148, 26)
-        pdf.cell(52, 10, f"Risk: {risk_labels[level]}  ({score}/100)", align="C", fill=True)
+        pdf.set_font("Helvetica", "B", 18)
+        pdf.set_xy(148, 24)
+        pdf.cell(18, 14, grade_letter, align="C", fill=True)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_xy(166, 24)
+        pdf.cell(34, 7, grade_desc.upper(), align="C", fill=True)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_xy(166, 31)
+        pdf.cell(34, 7, f"Score: {score}/100", align="C", fill=True)
 
         # DBA name
         dba = str(row.get("DBA_Name", "")).strip()
@@ -2389,101 +2468,180 @@ _current_settings: dict[str, Any] = {
 # ── MAIN CONTENT ─────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Dark Mode toggle ──────────────────────────────────────────────────────────────
-_dm_col, _ = st.columns([1, 6])
-_dark = _dm_col.toggle("🌙 Dark", value=st.session_state.get("dark_mode", False), key="dark_mode")
+# ── Dark Mode toggle — fixed top-right bar ───────────────────────────────────────
+st.markdown("""<style>
+/* Dark mode toggle — float to top right of main area */
+section[data-testid="stMain"] > div > div > div > div:first-child
+    [data-testid="stToggle"] {
+    position: fixed !important;
+    top: 14px !important;
+    right: 24px !important;
+    z-index: 9999 !important;
+    background: rgba(255,255,255,0.92) !important;
+    backdrop-filter: blur(8px) !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 10px !important;
+    padding: 4px 12px !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1) !important;
+}
+</style>""", unsafe_allow_html=True)
+_dark = st.toggle("🌙 Dark Mode", value=st.session_state.get("dark_mode", False), key="dark_mode")
 
-# Inject dark theme via a second <style> block — no JS needed
+
 if _dark:
     st.markdown("""<style>
-/* ── Dark Mode overrides ── */
-.stApp                              { background: #060d1f !important; }
-section[data-testid="stMain"]       { background: #060d1f !important; }
-.block-container                    { background: #060d1f !important; }
+/* ════════════════════════════════════════════
+   DARK MODE — Complete Override
+════════════════════════════════════════════ */
 
-/* Cards */
-.mc-card {
-    background: rgba(15,23,42,0.92) !important;
-    border-color: rgba(59,130,246,0.18) !important;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.45) !important;
+/* ── Base backgrounds ── */
+.stApp, section[data-testid="stMain"], .block-container,
+[data-testid="stAppViewContainer"] {
+    background: #060d1f !important;
 }
-.mc-card .lbl { color: #64748b !important; }
-.mc-card .val { filter: brightness(1.1); }
-.stat-card {
-    background: rgba(15,23,42,0.92) !important;
-    border-color: rgba(59,130,246,0.15) !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
-}
-.stat-card .sc-lbl { color: #64748b !important; }
-.stat-card .sc-sub { color: #475569 !important; }
-.howto-card {
-    background: rgba(15,23,42,0.92) !important;
-    border-color: rgba(59,130,246,0.15) !important;
-}
-.howto-title { color: #e2e8f0 !important; }
-.howto-desc  { color: #64748b !important; }
 
-/* Expanders */
-details {
-    background: #0f172a !important;
-    border-color: rgba(59,130,246,0.15) !important;
-}
-details > summary { color: #cbd5e1 !important; }
+/* ── General text ── */
+.block-container p, .stMarkdown p, .stMarkdown span,
+.stMarkdown li, .stMarkdown td, .stMarkdown th,
+label, .stCaption p { color: #cbd5e1 !important; }
+h1, h2, h3, h4      { color: #f1f5f9 !important; }
+.stCaption           { color: #475569 !important; }
+code                 { background: #1e293b !important; color: #93c5fd !important; }
 
-/* Info / warn boxes */
-.info-box { background: rgba(30,64,175,0.18) !important; color: #93c5fd !important; }
-.warn-box { background: rgba(120,53,15,0.25)  !important; color: #fcd34d !important; }
-.sec-head { background: rgba(37,99,235,0.12) !important; color: #93c5fd !important; }
+/* ── Tabs (dark override) ── */
+.stTabs [data-baseweb="tab-list"] { background: #0f172a !important; border-color: rgba(59,130,246,0.15) !important; }
+.stTabs [data-baseweb="tab"]      { color: #64748b !important; }
+.stTabs [data-baseweb="tab"]:hover { color: #fff !important; background: rgba(255,255,255,0.07) !important; }
+.stTabs [aria-selected="true"]    { background: #2563eb !important; color: #fff !important; }
 
-/* General text — scoped to block-container only, not colored elements */
-.block-container > div > div > div > p   { color: #cbd5e1 !important; }
-.block-container label                   { color: #94a3b8 !important; }
-.stMarkdown p                            { color: #cbd5e1 !important; }
-h1, h2, h3                              { color: #f1f5f9 !important; }
-.stCaption, .stCaption p                { color: #475569 !important; }
-
-/* Streamlit metric */
+/* ── Metric cards ── */
 [data-testid="stMetric"]      { background: #0f172a !important; border-color: rgba(59,130,246,0.2) !important; }
 [data-testid="stMetricValue"] { color: #f1f5f9 !important; }
 [data-testid="stMetricLabel"] { color: #64748b !important; }
 
-/* Inputs */
+/* ── mc-cards (summary cards) ── */
+.mc-card {
+    background: #0f172a !important;
+    border-color: rgba(59,130,246,0.2) !important;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5) !important;
+}
+.mc-card .lbl { color: #475569 !important; }
+
+/* ── Stat cards ── */
+.stat-card {
+    background: #0f172a !important;
+    border-color: rgba(59,130,246,0.15) !important;
+}
+.stat-card .sc-lbl { color: #64748b !important; }
+.stat-card .sc-sub { color: #334155 !important; }
+
+/* ── How-to cards ── */
+.howto-card  { background: #0f172a !important; border-color: rgba(59,130,246,0.15) !important; }
+.howto-title { color: #e2e8f0 !important; }
+.howto-desc  { color: #64748b !important; }
+.howto-tip   { background: rgba(30,64,175,0.15) !important; border-color: rgba(59,130,246,0.2) !important; }
+.howto-tip-title { color: #93c5fd !important; }
+
+/* ── A-F Grade cards ── */
+.gc-a { background: #052e16 !important; border-color: #166534 !important; color: #4ade80 !important; }
+.gc-b { background: #064e3b !important; border-color: #065f46 !important; color: #34d399 !important; }
+.gc-c { background: #422006 !important; border-color: #92400e !important; color: #fbbf24 !important; }
+.gc-d { background: #431407 !important; border-color: #9a3412 !important; color: #fb923c !important; }
+.gc-f { background: #4c0519 !important; border-color: #9f1239 !important; color: #fb7185 !important; }
+.grade-letter, .grade-count, .grade-label { color: inherit !important; }
+
+/* ── Sum banner ── */
+.sum-banner     { background: #0f172a !important; border-color: rgba(59,130,246,0.2) !important; }
+.sum-banner-top { color: #e2e8f0 !important; }
+.sum-pill       { background: #1e293b !important; color: #94a3b8 !important; }
+.sum-pill-active   { background: rgba(21,128,61,0.25)  !important; color: #4ade80 !important; }
+.sum-pill-oos      { background: rgba(185,28,28,0.25)  !important; color: #f87171 !important; }
+.sum-pill-inactive { background: rgba(161,98,7,0.25)   !important; color: #fbbf24 !important; }
+.sum-pill-notfound { background: rgba(71,85,105,0.35)  !important; color: #94a3b8 !important; }
+.sum-pill-rate     { background: rgba(37,99,235,0.25)  !important; color: #60a5fa !important; }
+.sum-pill-time     { background: rgba(124,58,237,0.25) !important; color: #a78bfa !important; }
+
+/* ── Risk ring cards ── */
+.risk-ring-card { background: #0f172a !important; border-color: rgba(59,130,246,0.15) !important; }
+.risk-ring-num  { color: #e2e8f0 !important; }
+.risk-ring-lbl  { color: #94a3b8 !important; }
+.risk-ring-sub  { color: #475569 !important; }
+.risk-ring-bg   { stroke: #1e293b !important; }
+
+/* ── Stepper ── */
+.step-circle { background: #1e293b !important; border-color: #334155 !important; color: #64748b !important; }
+.sw-done  .step-circle { background: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
+.sw-active .step-circle { background: #0f172a !important; border-color: #3b82f6 !important; color: #60a5fa !important; }
+.step-label { color: #475569 !important; }
+.sw-done   .step-label { color: #60a5fa !important; }
+.sw-active .step-label { color: #93c5fd !important; }
+.step-sub { color: #334155 !important; }
+.step-wrap:not(:last-child)::after { background: #1e293b !important; }
+.sw-done:not(:last-child)::after { background: #2563eb !important; }
+
+/* ── Section header ── */
+.sec-head { background: rgba(37,99,235,0.12) !important; color: #93c5fd !important; border-color: #3b82f6 !important; }
+
+/* ── Info / warn / log boxes ── */
+.info-box  { background: rgba(30,64,175,0.18) !important; color: #93c5fd !important; border-color: #3b82f6 !important; }
+.warn-box  { background: rgba(120,53,15,0.25) !important; color: #fcd34d !important; border-color: #d97706 !important; }
+.log-box   { background: #060d1f !important; border-color: #1e293b !important; }
+.log-line  { border-color: #1e293b !important; }
+.lt        { color: #334155 !important; }
+.li        { color: #94a3b8 !important; }
+.ls        { color: #4ade80 !important; }
+.lw        { color: #fbbf24 !important; }
+.le        { color: #f87171 !important; }
+
+/* ── Expanders ── */
+details { background: #0f172a !important; border-color: rgba(59,130,246,0.15) !important; }
+details > summary, details > summary p { color: #94a3b8 !important; }
+details[open] > summary { color: #60a5fa !important; }
+
+/* ── Inputs ── */
 .stTextInput > div > div > input,
 .stTextArea  > div > div > textarea {
-    background: #0f172a !important;
-    border-color: #1e293b !important;
-    color: #e2e8f0 !important;
+    background: #0f172a !important; border-color: #1e293b !important; color: #e2e8f0 !important;
 }
+.stTextInput > div > div > input::placeholder,
+.stTextArea  > div > div > textarea::placeholder { color: #334155 !important; }
 .stTextInput > div > div > input:focus,
 .stTextArea  > div > div > textarea:focus {
     border-color: #3b82f6 !important;
     box-shadow: 0 0 0 3px rgba(59,130,246,0.18) !important;
 }
 
-/* Select / dropdown */
-[data-baseweb="select"] > div {
-    background: #0f172a !important;
-    border-color: #1e293b !important;
-    color: #e2e8f0 !important;
-}
-[data-baseweb="menu"]    { background: #0f172a !important; }
-[data-baseweb="option"]  { background: #0f172a !important; color: #e2e8f0 !important; }
+/* ── Selectbox / dropdown ── */
+[data-baseweb="select"] > div { background: #0f172a !important; border-color: #1e293b !important; color: #e2e8f0 !important; }
+[data-baseweb="menu"]   { background: #0f172a !important; border-color: #1e293b !important; }
+[data-baseweb="option"] { background: #0f172a !important; color: #e2e8f0 !important; }
+[data-baseweb="option"]:hover { background: #1e293b !important; }
 
-/* File uploader */
-[data-testid="stFileUploader"] {
-    background: rgba(15,23,42,0.6) !important;
-    border-color: rgba(59,130,246,0.3) !important;
-}
+/* ── File uploader ── */
+[data-testid="stFileUploader"] { background: rgba(15,23,42,0.6) !important; border-color: rgba(59,130,246,0.3) !important; }
+[data-testid="stFileUploader"] p, [data-testid="stFileUploader"] span { color: #64748b !important; }
 
-/* Dataframe */
-[data-testid="stDataFrame"] { border-color: rgba(59,130,246,0.15) !important; }
+/* ── Dataframe ── */
+[data-testid="stDataFrame"] iframe { filter: invert(0.9) hue-rotate(180deg) !important; }
 
-/* Slider track */
+/* ── Slider ── */
 [data-baseweb="slider"] [role="slider"] { background: #3b82f6 !important; }
 
-/* Scrollbar */
+/* ── Radio / Toggle ── */
+[data-testid="stRadio"] label  { color: #94a3b8 !important; }
+[data-testid="stToggle"] label { color: #94a3b8 !important; }
+
+/* ── Progress bar ── */
+[data-testid="stProgressBar"] > div { background: #1e293b !important; }
+[data-testid="stProgressBar"] > div > div { background: linear-gradient(90deg,#2563eb,#7c3aed) !important; }
+
+/* ── Scrollbar ── */
 ::-webkit-scrollbar-track { background: #0f172a !important; }
-::-webkit-scrollbar-thumb { background: #1e293b !important; }
+::-webkit-scrollbar-thumb { background: #1e293b !important; border-radius: 99px !important; }
+
+/* ── Download buttons ── */
+.stDownloadButton > button { background: #0f172a !important; border-color: #1e293b !important; color: #60a5fa !important; }
+.stDownloadButton > button:hover { background: #1e293b !important; border-color: #3b82f6 !important; }
 </style>""", unsafe_allow_html=True)
 
 # ── Tabs ────────────────────────────────────────────────────────────────────────
@@ -3235,6 +3393,42 @@ with _tab_fmcsa:
             )
             st.plotly_chart(bar_fig, use_container_width=True)
 
+        # ── A-F Grade Summary Cards ───────────────────────────────────────────────
+        _grade_counts = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+        for _s, _ in risk_data:
+            _gl, _, _ = _compute_grade(_s)
+            _grade_counts[_gl] += 1
+
+        _avg_letter, _avg_cls, _avg_desc = _compute_grade(avg_score)
+        _grade_meta = {
+            "A": ("gc-a", "Excellent"),
+            "B": ("gc-b", "Good"),
+            "C": ("gc-c", "Caution"),
+            "D": ("gc-d", "Poor"),
+            "F": ("gc-f", "Avoid"),
+        }
+        _grade_html = '<div class="grade-row">'
+        for _gl, (_gcls, _gdesc) in _grade_meta.items():
+            _cnt = _grade_counts[_gl]
+            _pct = round(_cnt / len(rows) * 100) if rows else 0
+            _grade_html += (
+                f'<div class="grade-card {_gcls}">'
+                f'<span class="grade-letter">{_gl}</span>'
+                f'<span class="grade-count">{_cnt}</span>'
+                f'<span class="grade-label">{_gdesc} · {_pct}%</span>'
+                f'</div>'
+            )
+        # Avg grade card
+        _grade_html += (
+            f'<div class="grade-card {_avg_cls}" style="border-style:dashed">'
+            f'<span class="grade-letter">{_avg_letter}</span>'
+            f'<span class="grade-count">{avg_score}/100</span>'
+            f'<span class="grade-label">Fleet Average</span>'
+            f'</div>'
+        )
+        _grade_html += '</div>'
+        st.markdown(_grade_html, unsafe_allow_html=True)
+
         # ── Risk Score Ring Cards ─────────────────────────────────────────────────
         def _ring_svg(score: int, color: str) -> str:
             """SVG circular progress ring for a 0-100 score."""
@@ -3286,8 +3480,68 @@ with _tab_fmcsa:
             unsafe_allow_html=True,
         )
 
+        # ── US Carrier Map ────────────────────────────────────────────────────────
+        with st.expander("🗺️  US Carrier Map — State Distribution", expanded=False):
+            _state_re = re.compile(r'\b([A-Z]{2})\s+\d{5}')
+            _state_counts: dict[str, int] = {}
+            _state_grades: dict[str, list] = {}
+            for _r in rows:
+                _addr = str(_r.get("Physical_Address", ""))
+                _m = _state_re.search(_addr)
+                if _m:
+                    _st = _m.group(1)
+                    _state_counts[_st] = _state_counts.get(_st, 0) + 1
+                    if str(_r.get("Scrape_Status", "")).lower() == "success":
+                        _rs, _ = _compute_risk_score(_r)
+                        _state_grades.setdefault(_st, []).append(_rs)
+
+            if _state_counts:
+                _map_df = pd.DataFrame([
+                    {
+                        "State": _st,
+                        "Carriers": _cnt,
+                        "Avg Score": round(
+                            sum(_state_grades.get(_st, [0])) /
+                            max(len(_state_grades.get(_st, [1])), 1), 1
+                        ),
+                        "Grade": _compute_grade(int(
+                            sum(_state_grades.get(_st, [50])) /
+                            max(len(_state_grades.get(_st, [1])), 1)
+                        ))[0],
+                    }
+                    for _st, _cnt in _state_counts.items()
+                ])
+                _map_fig = px.choropleth(
+                    _map_df,
+                    locations="State",
+                    locationmode="USA-states",
+                    color="Carriers",
+                    scope="usa",
+                    color_continuous_scale=["#dbeafe", "#2563eb", "#1e3a8a"],
+                    hover_data={"Carriers": True, "Avg Score": True, "Grade": True},
+                    title="Carriers by State",
+                    labels={"Carriers": "# Carriers"},
+                )
+                _map_fig.update_layout(
+                    margin=dict(t=40, b=0, l=0, r=0),
+                    height=420,
+                    title_font_size=14,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    geo=dict(bgcolor="rgba(0,0,0,0)", lakecolor="#e0f2fe"),
+                )
+                st.plotly_chart(_map_fig, use_container_width=True)
+
+                # Top 5 states table
+                _top5 = _map_df.sort_values("Carriers", ascending=False).head(5)
+                st.caption("**Top 5 States:**  " + "  ·  ".join(
+                    f"{r['State']} ({r['Carriers']} carriers, Grade {r['Grade']})"
+                    for _, r in _top5.iterrows()
+                ))
+            else:
+                st.info("State data not available — address format may not include ZIP code.")
+
         # ── Search + Filter bar ────────────────────────────────────────────────────
-        _sf1, _sf2, _sf3 = st.columns([4, 2, 2])
+        _sf1, _sf2, _sf3, _sf4 = st.columns([4, 2, 2, 2])
         search_query = _sf1.text_input(
             "search",
             placeholder="🔍  Search by name, MC #, USDOT, or Input ID…",
@@ -3302,6 +3556,12 @@ with _tab_fmcsa:
         risk_filter = _sf3.selectbox(
             "Risk",
             ["ALL RISK", "Safe", "Caution", "High Risk"],
+            index=0,
+            label_visibility="collapsed",
+        )
+        grade_filter = _sf4.selectbox(
+            "Grade",
+            ["ALL GRADE", "A — Excellent", "B — Good", "C — Caution", "D — Poor", "F — Avoid"],
             index=0,
             label_visibility="collapsed",
         )
@@ -3334,6 +3594,16 @@ with _tab_fmcsa:
         preview_df["Risk_Score"] = [_safe_risk_badge(r) for r in rows]
         preview_df["Auth_Flags"] = [_safe_auth_flags(r) for r in rows]
 
+        # Grade column — letter only (A/B/C/D/F)
+        def _safe_grade(r: dict) -> str:
+            if str(r.get("Scrape_Status", "")).lower() != "success":
+                return "—"
+            s, _ = _compute_risk_score(r)
+            letter, _, _ = _compute_grade(s)
+            return letter
+
+        preview_df["Grade"] = [_safe_grade(r) for r in rows]
+
         # Apply search query
         if search_query.strip():
             _q = search_query.strip().lower()
@@ -3348,11 +3618,16 @@ with _tab_fmcsa:
         if status_filter != "ALL STATUS":
             preview_df = preview_df[preview_df["Carrier_Status"].str.upper() == status_filter]
 
-        # Apply risk filter (match against Risk_Score column text)
+        # Apply risk filter
         if risk_filter != "ALL RISK":
             _risk_map = {"Safe": "safe", "Caution": "caution", "High Risk": "high"}
             _rk = _risk_map[risk_filter]
             preview_df = preview_df[preview_df["Risk_Score"].str.lower().str.contains(_rk, na=False)]
+
+        # Apply grade filter
+        if grade_filter != "ALL GRADE":
+            _gf_letter = grade_filter[0]   # first char is the letter (A/B/C/D/F)
+            preview_df = preview_df[preview_df["Grade"] == _gf_letter]
 
         # Result count caption
         _filtered = len(preview_df)
@@ -3383,6 +3658,7 @@ with _tab_fmcsa:
                 "Scrape_Status":  st.column_config.TextColumn("Scrape",        width="small"),
                 "Status_Badge":   st.column_config.TextColumn("Status",        width="medium"),
                 "Carrier_Status": None,
+                "Grade":          st.column_config.TextColumn("Grade",         width="small"),
                 "Risk_Score":     st.column_config.TextColumn("Risk Score",    width="medium"),
                 "Auth_Flags":     st.column_config.TextColumn("Auth Alert",    width="medium"),
                 "Legal_Name":     st.column_config.TextColumn("Legal Name",    width="large"),
@@ -3441,7 +3717,8 @@ with _tab_fmcsa:
                         for _, _key in _cmp_fields:
                             if _key == "__risk__":
                                 _s, _l = _compute_risk_score(_cr)
-                                _vals.append(f"{_s}/100  ({_l.replace('_',' ').title()})")
+                                _gl, _, _gd = _compute_grade(_s)
+                                _vals.append(f"Grade {_gl} — {_gd}  ({_s}/100)")
                             elif _key == "__flags__":
                                 _vals.append(_authority_flags(_cr))
                             else:
