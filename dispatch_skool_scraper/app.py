@@ -2439,9 +2439,6 @@ with st.sidebar:
         st.caption("No saved lists yet.")
 
     st.markdown("---")
-    render_ai_sidebar()
-
-    st.markdown("---")
     st.markdown('<div class="sb-lbl">ℹ️ About</div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:.76rem;color:#64748b;line-height:1.6">'
@@ -2648,7 +2645,8 @@ details[open] > summary { color: #60a5fa !important; }
 _tab_fmcsa, _tab_ai = st.tabs(["🚛 FMCSA Scraper", "🤖 AI Scraper"])
 
 with _tab_ai:
-    render_ai_tab(groq_key=st.session_state.get("sb_groq_key", ""))
+    from ai_scraper_engine import _ENV_GROQ_KEY as _groq_key
+    render_ai_tab(groq_key=_groq_key)
 
 with _tab_fmcsa:
     # ── Slim Hero Topbar ──────────────────────────────────────────────────────────

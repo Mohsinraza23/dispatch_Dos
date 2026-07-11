@@ -305,19 +305,9 @@ def render_ai_tab(groq_key: str = "") -> None:
         unsafe_allow_html=True,
     )
 
-    # ── No key — show instructions ────────────────────────────────────────────
+    # ── No key — silent fail (key is managed server-side, not shown to client) ──
     if not groq_key:
-        st.markdown(
-            '<div class="ai-nokey">'
-            '<b>⚠️ Groq API Key required.</b><br>'
-            'Sidebar mein <b>"AI Engine"</b> section mein key paste karo.<br><br>'
-            '📌 Free key kaise milegi:<br>'
-            '&nbsp;&nbsp;1. <code>console.groq.com</code> pe jao<br>'
-            '&nbsp;&nbsp;2. Sign up (sirf email, no credit card)<br>'
-            '&nbsp;&nbsp;3. API Keys → Create → Copy → Sidebar mein paste karo'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+        st.info("AI Scraper is currently unavailable. Please try again later.")
         return
 
     # ── Capabilities bar ──────────────────────────────────────────────────────
