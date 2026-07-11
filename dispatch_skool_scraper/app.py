@@ -3193,11 +3193,22 @@ with _tab_fmcsa:
             unsafe_allow_html=True,
         )
 
-        # ── Status filter ──────────────────────────────────────────────────────────
-        f_col, _ = st.columns([3, 5])
-        status_filter = f_col.selectbox(
-            "Filter by status",
-            ["ALL", "ACTIVE", "INACTIVE", "OUT_OF_SERVICE"],
+        # ── Search + Filter bar ────────────────────────────────────────────────────
+        _sf1, _sf2, _sf3 = st.columns([4, 2, 2])
+        search_query = _sf1.text_input(
+            "search",
+            placeholder="🔍  Search by name, MC #, USDOT, or Input ID…",
+            label_visibility="collapsed",
+        )
+        status_filter = _sf2.selectbox(
+            "Status",
+            ["ALL STATUS", "ACTIVE", "INACTIVE", "OUT_OF_SERVICE"],
+            index=0,
+            label_visibility="collapsed",
+        )
+        risk_filter = _sf3.selectbox(
+            "Risk",
+            ["ALL RISK", "Safe", "Caution", "High Risk"],
             index=0,
             label_visibility="collapsed",
         )
@@ -3230,9 +3241,31 @@ with _tab_fmcsa:
         preview_df["Risk_Score"] = [_safe_risk_badge(r) for r in rows]
         preview_df["Auth_Flags"] = [_safe_auth_flags(r) for r in rows]
 
-        if status_filter != "ALL":
+        # Apply search query
+        if search_query.strip():
+            _q = search_query.strip().lower()
+            _search_cols = ["Legal_Name", "DBA_Name", "MC_Number", "USDOT_Number", "Input_ID"]
+            _mask = pd.Series([False] * len(preview_df), index=preview_df.index)
+            for _c in _search_cols:
+                if _c in preview_df.columns:
+                    _mask |= preview_df[_c].astype(str).str.lower().str.contains(_q, na=False)
+            preview_df = preview_df[_mask]
+
+        # Apply status filter
+        if status_filter != "ALL STATUS":
             preview_df = preview_df[preview_df["Carrier_Status"].str.upper() == status_filter]
-            st.caption(f"Showing {len(preview_df)} {status_filter} carriers out of {len(results_df)} total.")
+
+        # Apply risk filter (match against Risk_Score column text)
+        if risk_filter != "ALL RISK":
+            _risk_map = {"Safe": "safe", "Caution": "caution", "High Risk": "high"}
+            _rk = _risk_map[risk_filter]
+            preview_df = preview_df[preview_df["Risk_Score"].str.lower().str.contains(_rk, na=False)]
+
+        # Result count caption
+        _filtered = len(preview_df)
+        _total    = len(results_df)
+        if _filtered < _total:
+            st.caption(f"Showing **{_filtered}** of {_total} carriers — {_total - _filtered} filtered out.")
 
         # Row color: red override for flagged carriers, else status color
         def _style_row(row: pd.Series):
