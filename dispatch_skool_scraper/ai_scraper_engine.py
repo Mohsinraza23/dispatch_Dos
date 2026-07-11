@@ -1,7 +1,7 @@
 """
 ai_scraper_engine.py
 --------------------
-Dispatch DOS — Groq-powered AI engine for universal data scraping.
+CarrierPulse — Groq-powered AI engine for universal data scraping.
 
 Uses:
   - Groq Whisper large-v3   → audio transcription (99+ languages, FREE)
