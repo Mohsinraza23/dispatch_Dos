@@ -2102,7 +2102,41 @@ def _render_log_line(entry: dict) -> str:
 # Disk-based progress save / resume  (for large 5000+ carrier jobs)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_PROGRESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrape_progress.json")
+_PROGRESS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrape_progress.json")
+_SAVED_LISTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_lists.json")
+
+
+# ── Saved Lists helpers ───────────────────────────────────────────────────────
+
+def _load_saved_lists() -> dict:
+    """Return {name: [id, ...]} dict from disk, or empty dict."""
+    try:
+        if os.path.exists(_SAVED_LISTS_FILE):
+            with open(_SAVED_LISTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _write_saved_lists(data: dict) -> None:
+    try:
+        with open(_SAVED_LISTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _save_list(name: str, ids: list) -> None:
+    data = _load_saved_lists()
+    data[name] = ids
+    _write_saved_lists(data)
+
+
+def _delete_list(name: str) -> None:
+    data = _load_saved_lists()
+    data.pop(name, None)
+    _write_saved_lists(data)
 
 
 def _save_progress_to_disk(remaining_ids: list, completed_rows: list, dupes: list) -> None:
@@ -2278,6 +2312,52 @@ with st.sidebar:
             '✓ Proxy set</div>',
             unsafe_allow_html=True,
         )
+
+    st.markdown("---")
+    st.markdown('<div class="sb-lbl">📋 Saved Lists</div>', unsafe_allow_html=True)
+
+    _all_lists = _load_saved_lists()
+
+    # Save current list
+    if st.session_state.carrier_ids:
+        _sname_col, _sbtn_col = st.columns([3, 1])
+        _save_name = _sname_col.text_input(
+            "List name", placeholder="e.g. Client A",
+            label_visibility="collapsed", key="save_list_name",
+        )
+        if _sbtn_col.button("💾", key="btn_save_list", help="Save current list"):
+            _name = _save_name.strip() or f"List {len(_all_lists) + 1}"
+            _save_list(_name, st.session_state.carrier_ids)
+            st.success(f"Saved "{_name}"!", icon="✅")
+            st.rerun()
+    else:
+        st.caption("Load carriers first to save a list.")
+
+    # Show saved lists
+    if _all_lists:
+        for _lname, _lids in list(_all_lists.items()):
+            _lc1, _lc2, _lc3 = st.columns([4, 1, 1])
+            _lc1.markdown(
+                f'<div style="font-size:.78rem;color:#e2e8f0;padding-top:6px">'
+                f'<b>{_lname}</b> <span style="color:#64748b">({len(_lids)})</span></div>',
+                unsafe_allow_html=True,
+            )
+            if _lc2.button("Load", key=f"load_{_lname}", help=f"Load '{_lname}'"):
+                st.session_state.carrier_ids   = _lids
+                st.session_state.total_input   = len(_lids)
+                st.session_state.total_unique  = len(_lids)
+                st.session_state.dupes_removed = []
+                st.session_state.results_rows  = []
+                st.session_state.output_bytes  = None
+                st.session_state.counts        = {"success": 0, "not_found": 0,
+                                                   "failed": 0, "blocked": 0}
+                st.session_state.log_lines     = []
+                st.rerun()
+            if _lc3.button("🗑", key=f"del_{_lname}", help=f"Delete '{_lname}'"):
+                _delete_list(_lname)
+                st.rerun()
+    else:
+        st.caption("No saved lists yet.")
 
     st.markdown("---")
     render_ai_sidebar()
@@ -2829,7 +2909,19 @@ with _tab_fmcsa:
         if len(st.session_state.carrier_ids) > preview_n:
             st.caption(f"Showing first {preview_n} of "
                        f"{len(st.session_state.carrier_ids)} unique records.")
-    
+
+        # Quick save this list
+        with st.expander("💾 Save this list for later", expanded=False):
+            _qs_col1, _qs_col2 = st.columns([4, 1])
+            _qs_name = _qs_col1.text_input(
+                "Name", placeholder="e.g. Client A — weekly batch",
+                label_visibility="collapsed", key="quick_save_name",
+            )
+            if _qs_col2.button("Save", key="btn_quick_save", type="primary"):
+                _qn = _qs_name.strip() or f"List {len(_load_saved_lists()) + 1}"
+                _save_list(_qn, st.session_state.carrier_ids)
+                st.success(f"✅ Saved as **{_qn}** ({len(st.session_state.carrier_ids)} IDs). Load it anytime from the sidebar.")
+
         # Duplicates expander
         if st.session_state.dupes_removed:
             with st.expander(f"🔍 {len(st.session_state.dupes_removed)} duplicates removed"):
