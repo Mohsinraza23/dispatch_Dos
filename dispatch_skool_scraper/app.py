@@ -787,6 +787,48 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 .sum-banner-pills {
     display: flex; flex-wrap: wrap; gap: 8px;
 }
+/* ── Authority alert banners ── */
+.alert-flagged-banner {
+    background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
+    border: 2px solid #f87171;
+    border-left: 6px solid #dc2626;
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    animation: fadeInUp 0.35s ease both;
+}
+.alert-flagged-title {
+    font-weight: 800; color: #991b1b; font-size: .95rem; margin-bottom: 10px;
+}
+.alert-flagged-list { display: flex; flex-direction: column; gap: 6px; }
+.alert-flagged-item { font-size: .82rem; color: #7f1d1d; line-height: 1.45; }
+.alert-flag-dot { color: #dc2626; margin-right: 4px; }
+.alert-flag-tag {
+    background: #dc2626; color: #fff;
+    padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 700;
+}
+.alert-change-banner {
+    background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+    border: 2px solid #fbbf24;
+    border-left: 6px solid #d97706;
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    animation: fadeInUp 0.35s ease both;
+}
+.alert-change-title {
+    font-weight: 800; color: #92400e; font-size: .95rem; margin-bottom: 10px;
+}
+.alert-change-row { font-size: .84rem; color: #78350f; margin-bottom: 5px; }
+.alert-old-pill {
+    background: #fee2e2; color: #991b1b;
+    padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 700;
+}
+.alert-new-pill {
+    background: #dcfce7; color: #14532d;
+    padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 700;
+}
+
 .success-banner {
     background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
     border: 1px solid #6ee7b7;
@@ -1672,8 +1714,9 @@ def _init() -> None:
         # ETA tracking
         "scrape_start_time": None,
         "scrape_elapsed":    None,  # total seconds when run finished
-        "_toast_shown":      False, # show completion toast only once
-        "dark_mode":         False, # dark mode toggle
+        "_toast_shown":       False, # show completion toast only once
+        "_wl_changes_shown":  False, # show watch list change alert only once
+        "dark_mode":          False, # dark mode toggle
         # Resume support
         "_resume_existing_rows": [],  # rows from previous partial run (for resume)
     }
@@ -2183,6 +2226,84 @@ def _render_log_line(entry: dict) -> str:
 
 _PROGRESS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrape_progress.json")
 _SAVED_LISTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_lists.json")
+_WATCH_LIST_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watch_list.json")
+
+
+# ── Watch List helpers ────────────────────────────────────────────────────────
+
+def _load_watch_list() -> dict:
+    """Return {dot: {name, last_status, last_authority, last_checked}} or {}."""
+    try:
+        if os.path.exists(_WATCH_LIST_FILE):
+            with open(_WATCH_LIST_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _write_watch_list(data: dict) -> None:
+    try:
+        with open(_WATCH_LIST_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _add_to_watch(dot: str, name: str, status: str, authority: str) -> None:
+    data = _load_watch_list()
+    data[dot] = {
+        "name": name,
+        "last_status": status,
+        "last_authority": authority,
+        "last_checked": datetime.now().isoformat(),
+        "added_at": datetime.now().strftime("%Y-%m-%d"),
+    }
+    _write_watch_list(data)
+
+
+def _remove_from_watch(dot: str) -> None:
+    data = _load_watch_list()
+    data.pop(dot, None)
+    _write_watch_list(data)
+
+
+def _detect_watch_changes(rows: list) -> list:
+    """Compare freshly scraped rows against saved watch list statuses.
+    Returns list of change dicts and updates stored statuses."""
+    wl = _load_watch_list()
+    if not wl:
+        return []
+    changes = []
+    updated = False
+    for r in rows:
+        dot = str(r.get("USDOT_Number", "")).strip()
+        if not dot or dot not in wl:
+            continue
+        if str(r.get("Scrape_Status", "")).lower() != "success":
+            continue
+        old = wl[dot]
+        new_status = str(r.get("Carrier_Status", "")).upper()
+        old_status = str(old.get("last_status", "")).upper()
+        new_auth   = str(r.get("Common_Authority_Status", r.get("Contract_Authority_Status", ""))).lower()
+        old_auth   = str(old.get("last_authority", "")).lower()
+        if new_status != old_status or new_auth != old_auth:
+            changes.append({
+                "dot":        dot,
+                "name":       r.get("Legal_Name", old.get("name", dot)),
+                "old_status": old_status,
+                "new_status": new_status,
+                "old_auth":   old_auth,
+                "new_auth":   new_auth,
+            })
+        # Always update last_checked
+        wl[dot]["last_status"]    = new_status
+        wl[dot]["last_authority"] = new_auth
+        wl[dot]["last_checked"]   = datetime.now().isoformat()
+        updated = True
+    if updated:
+        _write_watch_list(wl)
+    return changes
 
 
 # ── Saved Lists helpers ───────────────────────────────────────────────────────
@@ -2439,6 +2560,46 @@ with st.sidebar:
         st.caption("No saved lists yet.")
 
     st.markdown("---")
+    st.markdown('<div class="sb-lbl">👁 Watch List</div>', unsafe_allow_html=True)
+    _wl_sidebar = _load_watch_list()
+    if _wl_sidebar:
+        for _wdot, _wdata in list(_wl_sidebar.items()):
+            _wstatus = str(_wdata.get("last_status", "?")).upper()
+            _wauth   = str(_wdata.get("last_authority", "")).lower()
+            if _wstatus == "ACTIVE" and "revoked" not in _wauth and "suspended" not in _wauth:
+                _wbadge = "🟢"
+            elif _wstatus in ("OUT_OF_SERVICE",) or "revoked" in _wauth or "suspended" in _wauth:
+                _wbadge = "🔴"
+            else:
+                _wbadge = "🟡"
+            _wc1, _wc2 = st.columns([5, 1])
+            _wname_short = str(_wdata.get("name", _wdot))[:20]
+            _wchecked    = str(_wdata.get("last_checked", ""))[:10]
+            _wc1.markdown(
+                f'<div style="font-size:.76rem;color:#e2e8f0;padding-top:4px;line-height:1.5">'
+                f'{_wbadge} <b>{_wname_short}</b><br>'
+                f'<span style="color:#64748b">DOT {_wdot} · {_wchecked}</span></div>',
+                unsafe_allow_html=True,
+            )
+            if _wc2.button("✕", key=f"unwatch_{_wdot}", help="Remove from watch list"):
+                _remove_from_watch(_wdot)
+                st.rerun()
+        if st.button("🔄 Re-check All Watched", key="btn_recheck_watch", use_container_width=True):
+            st.session_state.carrier_ids   = list(_wl_sidebar.keys())
+            st.session_state.total_input   = len(_wl_sidebar)
+            st.session_state.total_unique  = len(_wl_sidebar)
+            st.session_state.dupes_removed = []
+            st.session_state.results_rows  = []
+            st.session_state.output_bytes  = None
+            st.session_state.counts        = {"success": 0, "not_found": 0,
+                                               "failed": 0, "blocked": 0}
+            st.session_state.log_lines     = []
+            st.rerun()
+    else:
+        st.caption("No carriers being watched.")
+        st.caption("Add carriers from results.")
+
+    st.markdown("---")
     st.markdown('<div class="sb-lbl">ℹ️ About</div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:.76rem;color:#64748b;line-height:1.6">'
@@ -2575,6 +2736,25 @@ code                 { background: #1e293b !important; color: #93c5fd !important
 .step-sub { color: #334155 !important; }
 .step-wrap:not(:last-child)::after { background: #1e293b !important; }
 .sw-done:not(:last-child)::after { background: #2563eb !important; }
+
+/* ── Authority alert banners ── */
+.alert-flagged-banner {
+    background: linear-gradient(135deg, #450a0a 0%, #3b0808 100%) !important;
+    border-color: #ef4444 !important;
+    border-left-color: #ef4444 !important;
+}
+.alert-flagged-title { color: #fca5a5 !important; }
+.alert-flagged-item  { color: #fecaca !important; }
+.alert-flag-tag      { background: #ef4444 !important; color: #fff !important; }
+.alert-change-banner {
+    background: linear-gradient(135deg, #2d1a00 0%, #451a03 100%) !important;
+    border-color: #f59e0b !important;
+    border-left-color: #d97706 !important;
+}
+.alert-change-title { color: #fde68a !important; }
+.alert-change-row   { color: #fef3c7 !important; }
+.alert-old-pill     { background: rgba(185,28,28,0.4) !important; color: #fca5a5 !important; }
+.alert-new-pill     { background: rgba(21,128,61,0.4) !important; color: #86efac !important; }
 
 /* ── Section header ── */
 .sec-head { background: rgba(37,99,235,0.12) !important; color: #93c5fd !important; border-color: #3b82f6 !important; }
@@ -3146,8 +3326,9 @@ with _tab_fmcsa:
                 st.session_state.output_bytes  = None
                 st.session_state._settings     = _current_settings
                 st.session_state.scrape_elapsed = None
-                st.session_state["_toast_shown"] = False
-    
+                st.session_state["_toast_shown"]      = False
+                st.session_state["_wl_changes_shown"] = False
+
                 # Fresh run (not a resume) → clear any leftover progress file
                 if not st.session_state.get("_resume_existing_rows"):
                     _clear_progress_file()
@@ -3282,6 +3463,62 @@ with _tab_fmcsa:
                 icon="🚛",
             )
     
+        # ── Watch List change detection ────────────────────────────────────────────
+        _wl_changes = _detect_watch_changes(rows)
+        if _wl_changes and not st.session_state.get("_wl_changes_shown"):
+            st.session_state["_wl_changes_shown"] = True
+            _chg_html = (
+                '<div class="alert-change-banner">'
+                '<div class="alert-change-title">⚡ Status Changes Detected on Watched Carriers!</div>'
+            )
+            for _ch in _wl_changes:
+                _old_s = _ch["old_status"] or "Unknown"
+                _new_s = _ch["new_status"] or "Unknown"
+                _chg_html += (
+                    f'<div class="alert-change-row">'
+                    f'<b>{_ch["name"]}</b> (DOT {_ch["dot"]}): '
+                    f'<span class="alert-old-pill">{_old_s}</span>'
+                    f' → '
+                    f'<span class="alert-new-pill">{_new_s}</span>'
+                    f'</div>'
+                )
+            _chg_html += '</div>'
+            st.markdown(_chg_html, unsafe_allow_html=True)
+
+        # ── Flagged carriers alert banner ──────────────────────────────────────────
+        _flagged_rows = [
+            r for r in rows
+            if str(r.get("Scrape_Status", "")).lower() == "success"
+            and _authority_flags(r) != "Clear"
+        ]
+        if _flagged_rows:
+            _flag_html = (
+                f'<div class="alert-flagged-banner">'
+                f'<div class="alert-flagged-title">'
+                f'🚨 {len(_flagged_rows)} Carrier{"s" if len(_flagged_rows) != 1 else ""}'
+                f' Flagged — Authority Issues Detected</div>'
+                f'<div class="alert-flagged-list">'
+            )
+            for _fr in _flagged_rows[:12]:
+                _fname  = _fr.get("Legal_Name") or _fr.get("Input_ID", "?")
+                _fflags = _authority_flags(_fr)
+                _fdot   = _fr.get("USDOT_Number", "")
+                _flag_html += (
+                    f'<div class="alert-flagged-item">'
+                    f'<span class="alert-flag-dot">●</span> '
+                    f'<b>{_fname}</b>'
+                    + (f' · DOT {_fdot}' if _fdot else '') +
+                    f' — <span class="alert-flag-tag">{_fflags}</span>'
+                    f'</div>'
+                )
+            if len(_flagged_rows) > 12:
+                _flag_html += (
+                    f'<div style="margin-top:6px;font-size:.8rem;color:#fca5a5">'
+                    f'... and {len(_flagged_rows) - 12} more. See Auth Alert column below.</div>'
+                )
+            _flag_html += '</div></div>'
+            st.markdown(_flag_html, unsafe_allow_html=True)
+
         # ── Compute summary numbers ────────────────────────────────────────────────
         status_series  = results_df["Carrier_Status"].str.upper()
         n_active       = int((status_series == "ACTIVE").sum())
@@ -3767,6 +4004,66 @@ with _tab_fmcsa:
                         pass
                 elif len(_cmp_selected) == 1:
                     st.info("Select at least one more carrier to compare.")
+
+        # ── Watch List management expander ────────────────────────────────────────
+        _success_for_watch = [
+            r for r in rows
+            if str(r.get("Scrape_Status", "")).lower() == "success"
+            and str(r.get("USDOT_Number", "")).strip()
+        ]
+        if _success_for_watch:
+            _wl_now = _load_watch_list()
+            _cur_watched = set(_wl_now.keys())
+            _watch_opts  = [
+                f"{r.get('Legal_Name', r.get('Input_ID', '?'))[:36]}  |  DOT {r.get('USDOT_Number','')}"
+                for r in _success_for_watch
+            ]
+            _watch_defaults = [
+                opt for opt, r in zip(_watch_opts, _success_for_watch)
+                if str(r.get("USDOT_Number", "")) in _cur_watched
+            ]
+            with st.expander(
+                f"👁  Watch List — Monitor carriers for status changes"
+                + (f"  ({len(_cur_watched)} watched)" if _cur_watched else ""),
+                expanded=bool(_flagged_rows and not _cur_watched)
+            ):
+                st.caption(
+                    "Select carriers below and save to be alerted when their status changes. "
+                    "Use **Re-check All Watched** in the sidebar anytime."
+                )
+                _to_watch = st.multiselect(
+                    "Carriers to watch:",
+                    options=_watch_opts,
+                    default=_watch_defaults,
+                    placeholder="Select carriers to monitor...",
+                    key="watch_multiselect",
+                    label_visibility="collapsed",
+                )
+                _wbtn_c1, _wbtn_c2 = st.columns([2, 5])
+                if _wbtn_c1.button("💾 Save Watch List", key="btn_save_watch", type="primary"):
+                    # Add selected
+                    _selected_dots = set()
+                    for _i, _opt in enumerate(_watch_opts):
+                        _wr   = _success_for_watch[_i]
+                        _wdot = str(_wr.get("USDOT_Number", "")).strip()
+                        if not _wdot:
+                            continue
+                        if _opt in _to_watch:
+                            _selected_dots.add(_wdot)
+                            _add_to_watch(
+                                _wdot,
+                                _wr.get("Legal_Name", _wr.get("Input_ID", _wdot)),
+                                str(_wr.get("Carrier_Status", "")).upper(),
+                                str(_wr.get("Common_Authority_Status", "")),
+                            )
+                        elif _wdot in _cur_watched:
+                            _remove_from_watch(_wdot)
+                    st.success(
+                        f"Watch list saved — monitoring {len(_selected_dots)} carrier(s). "
+                        "Use sidebar to re-check anytime.",
+                        icon="👁",
+                    )
+                    st.rerun()
 
         # Failed records expander
         failed_df = results_df[results_df["Scrape_Status"].isin(_FAILED_STATUSES)]
