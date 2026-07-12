@@ -293,7 +293,7 @@ def render_ai_tab(groq_key: str = "") -> None:
         '<h1>🤖 AI Universal Scraper</h1>'
         '<span class="ds-slim-sep">|</span>'
         '<div class="ds-slim-pills">'
-        '<span class="ds-slim-pill">⚡ Groq Powered</span>'
+        '<span class="ds-slim-pill">⚡ AI Powered</span>'
         '<span class="ds-slim-pill green">✓ Any Website</span>'
         '<span class="ds-slim-pill">🎤 99+ Languages</span>'
         '</div>'
@@ -439,7 +439,7 @@ def render_ai_tab(groq_key: str = "") -> None:
         st.markdown(
             '<div class="info-box">'
             '🎤 Audio record karo ya file upload karo — '
-            'Groq Whisper automatically samjhega. '
+            'AI automatically samjhega. '
             '<b>99+ languages</b> supported: Urdu, Hindi, Arabic, English, sab chalega.'
             '</div>',
             unsafe_allow_html=True,
@@ -473,7 +473,7 @@ def render_ai_tab(groq_key: str = "") -> None:
         if audio_data:
             if st.button("🎤 Transcribe & Send", type="primary",
                          key="ai_transcribe", use_container_width=False):
-                with st.spinner("Audio transcribe ho raha hai (Groq Whisper)..."):
+                with st.spinner("Audio transcribe ho raha hai..."):
                     try:
                         text = transcribe_audio(audio_data, audio_name, groq_key)
                         if text:

@@ -2285,7 +2285,7 @@ def _detect_watch_changes(rows: list) -> list:
         old = wl[dot]
         new_status = str(r.get("Carrier_Status", "")).upper()
         old_status = str(old.get("last_status", "")).upper()
-        new_auth   = str(r.get("Common_Authority_Status", r.get("Contract_Authority_Status", ""))).lower()
+        new_auth   = str(r.get("Operating_Authority_Status", "")).lower()
         old_auth   = str(old.get("last_authority", "")).lower()
         if new_status != old_status or new_auth != old_auth:
             changes.append({
@@ -3463,9 +3463,12 @@ with _tab_fmcsa:
                 icon="🚛",
             )
     
-        # ── Watch List change detection ────────────────────────────────────────────
-        _wl_changes = _detect_watch_changes(rows)
-        if _wl_changes and not st.session_state.get("_wl_changes_shown"):
+        # ── Watch List change detection (run once per scrape, not every rerun) ──────
+        if not st.session_state.get("_wl_changes_shown"):
+            _wl_changes = _detect_watch_changes(rows)
+        else:
+            _wl_changes = []
+        if _wl_changes:
             st.session_state["_wl_changes_shown"] = True
             _chg_html = (
                 '<div class="alert-change-banner">'
@@ -4054,7 +4057,7 @@ with _tab_fmcsa:
                                 _wdot,
                                 _wr.get("Legal_Name", _wr.get("Input_ID", _wdot)),
                                 str(_wr.get("Carrier_Status", "")).upper(),
-                                str(_wr.get("Common_Authority_Status", "")),
+                                str(_wr.get("Operating_Authority_Status", "")),
                             )
                         elif _wdot in _cur_watched:
                             _remove_from_watch(_wdot)
