@@ -42,7 +42,7 @@ from fmcsa_scraper import (
     DEFAULT_DELAY_MIN,
     DEFAULT_DELAY_MAX,
 )
-from ai_tab import render_ai_tab, render_ai_sidebar
+from ai_tab import render_ai_tab
 
 _FMCSA_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -3466,10 +3466,10 @@ with _tab_fmcsa:
         # ── Watch List change detection (run once per scrape, not every rerun) ──────
         if not st.session_state.get("_wl_changes_shown"):
             _wl_changes = _detect_watch_changes(rows)
+            st.session_state["_wl_changes_shown"] = True
         else:
             _wl_changes = []
         if _wl_changes:
-            st.session_state["_wl_changes_shown"] = True
             _chg_html = (
                 '<div class="alert-change-banner">'
                 '<div class="alert-change-title">⚡ Status Changes Detected on Watched Carriers!</div>'
