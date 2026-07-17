@@ -2821,12 +2821,222 @@ details[open] > summary { color: #60a5fa !important; }
 .stDownloadButton > button:hover { background: #1e293b !important; border-color: #3b82f6 !important; }
 </style>""", unsafe_allow_html=True)
 
+# ── Canada Scraper Tab renderer ──────────────────────────────────────────────────
+def _render_canada_tab() -> None:
+    """Render the Canada Carrier Search tab UI."""
+    import threading
+    from datetime import datetime, timezone
+
+    st.markdown("""
+    <div class="ds-header-slim">
+      <h1>🇨🇦 Canada Carrier Lookup</h1>
+      <span class="ds-slim-sep">|</span>
+      <div class="ds-slim-pills">
+        <span class="ds-slim-pill">CarrierPulse™</span>
+        <span class="ds-slim-pill green">✓ Live FMCSA Data</span>
+        <span class="ds-slim-pill">Cross-Border Carriers</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.info(
+        "**How it works:** Canadian carriers that operate in the US are registered in "
+        "the FMCSA SAFER database. Search by company name to find them and get full "
+        "safety profiles — same 30+ fields as US carriers.",
+        icon="ℹ️",
+    )
+
+    # ── Session state init ────────────────────────────────────────────────────
+    for key, val in {
+        "ca_search_results": [],
+        "ca_rows": [],
+        "ca_is_scraping": False,
+        "ca_stop_event": None,
+        "ca_progress": (0, 0),
+        "ca_done": False,
+    }.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
+
+    # ── Search Input ──────────────────────────────────────────────────────────
+    st.markdown('<div class="sec-head">🔍 Step 1 — Search Canadian Carriers</div>', unsafe_allow_html=True)
+
+    col_inp, col_max = st.columns([4, 1])
+    with col_inp:
+        ca_query = st.text_input(
+            "Company Name",
+            placeholder="e.g. Maple Leaf Trucking, Trans Canada Freight...",
+            key="ca_query_input",
+            label_visibility="collapsed",
+        )
+    with col_max:
+        ca_max = st.number_input("Max results", min_value=1, max_value=200, value=25, step=5, key="ca_max")
+
+    btn_col, _ = st.columns([2, 6])
+    with btn_col:
+        do_search = st.button("🔍 Search Canada", type="primary", key="ca_search_btn", use_container_width=True)
+
+    if do_search and ca_query.strip():
+        with st.spinner("Searching FMCSA for Canadian carriers..."):
+            try:
+                from canada_scraper import search_canada_carriers
+                found = search_canada_carriers(ca_query.strip(), max_results=int(ca_max))
+                st.session_state["ca_search_results"] = found
+                st.session_state["ca_rows"] = []
+                st.session_state["ca_done"] = False
+            except Exception as exc:
+                st.error(f"Search failed: {exc}")
+                found = []
+
+        if not found:
+            st.warning("No Canadian carriers found. Try a broader name or fewer words.")
+        else:
+            st.success(f"Found **{len(found)}** Canadian carrier(s). Click **Scrape Profiles** to get full data.")
+
+    # ── Search Results Preview ────────────────────────────────────────────────
+    search_results = st.session_state.get("ca_search_results", [])
+
+    if search_results:
+        st.markdown('<div class="sec-head">📋 Step 2 — Select & Scrape</div>', unsafe_allow_html=True)
+
+        import pandas as pd
+        preview_df = pd.DataFrame(search_results)
+        st.dataframe(preview_df, use_container_width=True, height=220)
+
+        delay_col, btn2_col, stop_col = st.columns([2, 2, 2])
+        with delay_col:
+            ca_delay = st.slider("Delay between requests (s)", 2, 10, 3, key="ca_delay")
+        with btn2_col:
+            do_scrape = st.button(
+                "⚡ Scrape Profiles",
+                type="primary",
+                key="ca_scrape_btn",
+                use_container_width=True,
+                disabled=st.session_state["ca_is_scraping"],
+            )
+        with stop_col:
+            do_stop = st.button(
+                "⏹ Stop",
+                key="ca_stop_btn",
+                use_container_width=True,
+                disabled=not st.session_state["ca_is_scraping"],
+            )
+
+        if do_stop and st.session_state.get("ca_stop_event"):
+            st.session_state["ca_stop_event"].set()
+            st.session_state["ca_is_scraping"] = False
+            st.rerun()
+
+        if do_scrape and not st.session_state["ca_is_scraping"]:
+            stop_ev = threading.Event()
+            st.session_state["ca_stop_event"]  = stop_ev
+            st.session_state["ca_is_scraping"] = True
+            st.session_state["ca_rows"]        = []
+            st.session_state["ca_done"]        = False
+            st.session_state["ca_progress"]    = (0, len(search_results))
+
+            results_store: list[dict] = []
+            scraped_at = datetime.now(timezone.utc).isoformat()
+
+            def _ca_worker() -> None:
+                try:
+                    from canada_scraper import scrape_canada_batch, canada_result_to_row
+
+                    def _cb(current: int, total_: int, name: str) -> None:
+                        st.session_state["ca_progress"] = (current, total_)
+
+                    raw = scrape_canada_batch(
+                        search_results,
+                        delay_min=float(ca_delay),
+                        delay_max=float(ca_delay) + 2,
+                        stop_event=stop_ev,
+                        progress_callback=_cb,
+                    )
+                    for idx, res in enumerate(raw):
+                        inp_name = (
+                            search_results[idx].get("company_name", "")
+                            or res.get("legal_name", "Unknown")
+                        )
+                        results_store.append(canada_result_to_row(res, inp_name, scraped_at))
+                except Exception as exc:
+                    import logging as _logging
+                    _logging.getLogger(__name__).exception("Canada scrape worker error: %s", exc)
+                finally:
+                    st.session_state["ca_rows"]       = results_store
+                    st.session_state["ca_is_scraping"] = False
+                    st.session_state["ca_done"]        = True
+
+            t = threading.Thread(target=_ca_worker, daemon=True)
+            t.start()
+            st.rerun()
+
+    # ── Progress Bar ──────────────────────────────────────────────────────────
+    if st.session_state.get("ca_is_scraping"):
+        cur, tot = st.session_state.get("ca_progress", (0, 0))
+        pct = cur / tot if tot else 0
+        st.progress(pct, text=f"Scraping... {cur}/{tot} carriers")
+        st.rerun()
+
+    # ── Results ───────────────────────────────────────────────────────────────
+    ca_rows = st.session_state.get("ca_rows", [])
+    if ca_rows:
+        import pandas as pd
+
+        st.markdown('<div class="sec-head">✅ Step 3 — Results</div>', unsafe_allow_html=True)
+
+        n_found = sum(1 for r in ca_rows if r.get("Scrape_Status") == "found")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Carriers", len(ca_rows))
+        m2.metric("Profiles Found", n_found)
+        m3.metric("Not Found", len(ca_rows) - n_found)
+
+        result_df = pd.DataFrame(ca_rows, columns=OUTPUT_COLS)
+
+        # Add Risk Score column
+        result_df["Risk_Score"] = result_df.apply(
+            lambda r: _risk_badge(*_compute_risk_score(r.to_dict())), axis=1
+        )
+
+        st.dataframe(result_df, use_container_width=True, height=400)
+
+        # ── Excel Export ──────────────────────────────────────────────────────
+        try:
+            import openpyxl
+            from io import BytesIO as _BytesIO
+            _wb_buf = _BytesIO()
+            result_df.to_excel(_wb_buf, index=False, engine="openpyxl")
+            _wb_buf.seek(0)
+            st.download_button(
+                "📥 Download Excel",
+                data=_wb_buf.read(),
+                file_name=f"canada_carriers_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+            )
+        except Exception:
+            csv_bytes = result_df.to_csv(index=False).encode()
+            st.download_button(
+                "📥 Download CSV",
+                data=csv_bytes,
+                file_name=f"canada_carriers_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                type="primary",
+            )
+
+    elif st.session_state.get("ca_done") and not ca_rows:
+        st.warning("Scrape completed but no profiles were returned.")
+
+
 # ── Tabs ────────────────────────────────────────────────────────────────────────
-_tab_fmcsa, _tab_ai = st.tabs(["🚛 FMCSA Scraper", "🤖 AI Scraper"])
+_tab_fmcsa, _tab_canada, _tab_ai = st.tabs(["🚛 FMCSA Scraper", "🇨🇦 Canada Scraper", "🤖 AI Scraper"])
 
 with _tab_ai:
     from ai_scraper_engine import _ENV_GROQ_KEY as _groq_key
     render_ai_tab(groq_key=_groq_key)
+
+# ── Canada Scraper Tab ────────────────────────────────────────────────────────
+with _tab_canada:
+    _render_canada_tab()
 
 with _tab_fmcsa:
     # ── Slim Hero Topbar ──────────────────────────────────────────────────────────
