@@ -100,8 +100,8 @@ SEARCH_TYPE_MAP: dict[str, str] = {
 }
 
 # Default delay range between requests (seconds) — configurable per call
-DEFAULT_DELAY_MIN = 12.0
-DEFAULT_DELAY_MAX = 25.0
+DEFAULT_DELAY_MIN = 5.0
+DEFAULT_DELAY_MAX = 12.0
 
 # ── Field labels exactly as printed on FMCSA result page ─────────────────────
 # Pattern: <th>Legal Name:</th><td>[value]</td> in same <tr>
@@ -393,7 +393,8 @@ def _derive_carrier_status(fields: dict[str, str], page_text_lower: str) -> str:
               default → INACTIVE (conservative)
     """
     oos = fields.get("oos_date", "").strip().lower()
-    _date_pat = re.compile(r'\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}')
+    # Match both MM/DD/YYYY (from HTML) and YYYY-MM-DD (from API)
+    _date_pat = re.compile(r'\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\d{4}[/\-]\d{1,2}[/\-]\d{1,2}')
     if oos and oos not in ("", "none", "n/a", "-") and _date_pat.search(oos):
         return "OUT_OF_SERVICE"
 
@@ -695,7 +696,7 @@ def _api_get(
         def _s(val: Any) -> str:
             return str(val).strip() if val is not None else ""
 
-        oos_date = _s(carrier.get("oosDate") or carrier.get("safetyRatingDate") or "")
+        oos_date = _s(carrier.get("oosDate") or "")
         op_status = _s(carrier.get("operatingStatus") or carrier.get("statusCode") or "")
         # Derive status
         fields_tmp = {"oos_date": oos_date, "operating_authority_status": op_status, "entity_type": ""}
@@ -870,7 +871,7 @@ def scrape_carrier(
     if web_key and search_type in ("USDOT", "MC"):
         log.info(f"[api] {search_type}:{search_value}")
         api_result = _api_get(search_value, search_type, web_key, sess)
-        if api_result is not None:
+        if api_result is not None and api_result.get("status") == "found":
             result.update(api_result)
             # Apply delay even for API calls (polite)
             wait = random.uniform(min(delay_min, 2), min(delay_max, 5))
@@ -878,6 +879,9 @@ def scrape_carrier(
             if own_session:
                 sess.close()
             return result
+        # API returned not_found or error — fall through to HTML scraping
+        if api_result is not None:
+            log.info(f"  API: {api_result.get('status', 'no result')} — trying HTML scraper")
 
     # ── Step 1 — requests (HTML scraper) ─────────────────────────────────────
     log.info(f"[requests] {search_type}:{search_value}")

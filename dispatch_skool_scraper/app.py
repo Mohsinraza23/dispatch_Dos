@@ -39,6 +39,8 @@ import plotly.express as px
 from fmcsa_scraper import (
     scrape_carrier,
     _make_session,
+    _api_get,
+    SEARCH_TYPE_MAP,
     DEFAULT_DELAY_MIN,
     DEFAULT_DELAY_MAX,
 )
@@ -1988,6 +1990,19 @@ def _scraper_thread(
 
     # ── Playwright scrape helper ───────────────────────────────────────────
     def _pw_scrape_one(cid: str) -> dict:
+        # Try FMCSA API first if key is available (faster, never IP-blocked)
+        web_key = settings.get("web_key", "")
+        if web_key:
+            _primary = _guess_type(cid)
+            _bare = re.sub(r"^(MC|DOT|USDOT)\s*[#\-\s]?", "", cid, flags=re.IGNORECASE).strip()
+            _sess = _make_session()
+            try:
+                api_res = _api_get(_bare, _primary, web_key, _sess)
+            finally:
+                _sess.close()
+            if api_res and api_res.get("status") == "found":
+                return api_res
+
         from fmcsa_playwright_scraper import scrape_usdot as _scrape_fn
         page = _pw_ctx.new_page()
         try:
@@ -2083,11 +2098,29 @@ def _scraper_thread(
     # PATH B — HTTP requests fallback (when Playwright unavailable)
     # ─────────────────────────────────────────────────────────────────────
     else:
-        max_workers      = min(int(settings.get("max_concurrent", 2)), 3)
+        max_workers      = min(int(settings.get("max_concurrent", 1)), 2)
         skip_type_retry  = settings.get("skip_type_retry", False)
         pw_enabled       = settings.get("playwright_fallback", False)
         conn_failures    = [0]
         _IP_BLOCK_WARNED = [False]
+
+        # Thread-local sessions — one session created + warmed per thread,
+        # reused for all carriers that thread handles.
+        # Refreshed every 200 carriers to prevent FMCSA session expiry.
+        _tls = threading.local()
+
+        def _get_sess() -> Any:
+            count = getattr(_tls, "count", 0)
+            if count == 0 or count % 200 == 0:
+                if hasattr(_tls, "session"):
+                    try:
+                        _tls.session.close()
+                    except Exception:
+                        pass
+                _tls.session = _make_session(proxy=settings.get("proxy"))
+                _warm_session(_tls.session)
+            _tls.count = count + 1
+            return _tls.session
 
         def _process_one(i: int, cid: str) -> None:
             if stop_event.is_set():
@@ -2095,8 +2128,7 @@ def _scraper_thread(
 
             primary  = _guess_type(cid)
             fallback = "MC" if primary == "USDOT" else "USDOT"
-            sess     = _make_session(proxy=settings.get("proxy"))
-            _warm_session(sess)
+            sess     = _get_sess()
 
             _log("info", f"[{i+1}/{total}] Searching {primary}: {cid}")
 
@@ -2136,7 +2168,6 @@ def _scraper_thread(
                     res = {"status": "error",
                            "error_detail": f"Fallback failed: {exc}"}
 
-            sess.close()
             row           = _flatten(cid, res)
             scrape_status = row["Scrape_Status"]
 
@@ -2466,10 +2497,10 @@ with st.sidebar:
 
     st.markdown('<div class="sb-lbl">⚙️ Scraper Settings</div>', unsafe_allow_html=True)
 
-    delay_min = st.slider("Min delay (seconds)", 2, 40, 3, 1,
+    delay_min = st.slider("Min delay (seconds)", 2, 40, 5, 1,
                           help="Min pause between FMCSA requests.")
     delay_max = st.slider("Max delay (seconds)", delay_min, 60,
-                          max(8, delay_min + 2), 1,
+                          max(12, delay_min + 5), 1,
                           help="Max pause between FMCSA requests.")
 
     st.markdown('<div class="sb-lbl">🔑 FMCSA API Key (Recommended)</div>',
@@ -2613,7 +2644,7 @@ with st.sidebar:
 _current_settings: dict[str, Any] = {
     "delay_min":           delay_min,
     "delay_max":           delay_max,
-    "max_concurrent":      3,
+    "max_concurrent":      1,
     "playwright_fallback": playwright_fallback,
     "headless":            True,
     "proxy":               proxy_input.strip() or None,
@@ -2994,7 +3025,9 @@ def _render_canada_tab() -> None:
 
         # Add Risk Score column
         result_df["Risk_Score"] = result_df.apply(
-            lambda r: _risk_badge(*_compute_risk_score(r.to_dict())), axis=1
+            lambda r: _risk_badge(*_compute_risk_score(r.to_dict()))
+                      if r.get("Scrape_Status") == "found" else "—",
+            axis=1
         )
 
         st.dataframe(result_df, use_container_width=True, height=400)
@@ -3787,7 +3820,10 @@ with _tab_fmcsa:
             return "⚫ —"
     
         # ── Charts row: Pie (status) + Bar (risk) ─────────────────────────────────
-        risk_data   = [_compute_risk_score(r) for r in rows]
+        # Only compute risk for successfully scraped rows — failed/not_found rows
+        # have no real data and would skew scores toward neutral 50.
+        _success_rows = [r for r in rows if str(r.get("Scrape_Status", "")).lower() == "success"]
+        risk_data   = [_compute_risk_score(r) for r in _success_rows]
         n_safe      = sum(1 for _, l in risk_data if l == "safe")
         n_caution   = sum(1 for _, l in risk_data if l == "caution")
         n_high_risk = sum(1 for _, l in risk_data if l == "high_risk")
@@ -3858,7 +3894,7 @@ with _tab_fmcsa:
         _grade_html = '<div class="grade-row">'
         for _gl, (_gcls, _gdesc) in _grade_meta.items():
             _cnt = _grade_counts[_gl]
-            _pct = round(_cnt / len(rows) * 100) if rows else 0
+            _pct = round(_cnt / len(_success_rows) * 100) if _success_rows else 0
             _grade_html += (
                 f'<div class="grade-card {_gcls}">'
                 f'<span class="grade-letter">{_gl}</span>'
@@ -3894,9 +3930,9 @@ with _tab_fmcsa:
                 f'</svg>'
             )
 
-        _safe_pct    = round(n_safe    / len(rows) * 100) if rows else 0
-        _caution_pct = round(n_caution / len(rows) * 100) if rows else 0
-        _high_pct    = round(n_high_risk / len(rows) * 100) if rows else 0
+        _safe_pct    = round(n_safe    / len(_success_rows) * 100) if _success_rows else 0
+        _caution_pct = round(n_caution / len(_success_rows) * 100) if _success_rows else 0
+        _high_pct    = round(n_high_risk / len(_success_rows) * 100) if _success_rows else 0
 
         st.markdown(
             f'<div class="risk-rings-row">'
