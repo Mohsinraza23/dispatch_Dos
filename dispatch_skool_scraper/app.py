@@ -1,7 +1,7 @@
 """
 app.py
 ──────
-CarrierPulse — FMCSA Bulk Scraper  ·  Streamlit Web App
+DispatchDOS — FMCSA Bulk Scraper  ·  Streamlit Web App
 
 Run:
     streamlit run app.py
@@ -76,7 +76,7 @@ def _warm_session(session: Any) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="CarrierPulse — FMCSA Carrier Intelligence",
+    page_title="DispatchDOS — FMCSA Carrier Verification",
     page_icon="🚛",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -127,8 +127,10 @@ st.markdown("""
 :root {
     --brand-primary:   #2563eb;
     --brand-dark:      #1d4ed8;
-    --brand-navy:      #0f172a;
-    --brand-navy-mid:  #1e293b;
+    --brand-navy:      #020617;
+    --brand-navy-mid:  #0f172a;
+    --brand-amber:     #f59e0b;
+    --brand-amber-lt:  #fcd34d;
     --brand-success:   #059669;
     --brand-warning:   #d97706;
     --brand-danger:    #dc2626;
@@ -146,6 +148,7 @@ st.markdown("""
     --shadow-sm:  0 1px 4px rgba(0,0,0,0.06);
     --shadow-md:  0 4px 18px rgba(0,0,0,0.08);
     --shadow-lg:  0 8px 32px rgba(0,0,0,0.12);
+    --shadow-blue: 0 8px 32px rgba(37,99,235,0.25);
     --transition: 0.22s cubic-bezier(0.4,0,0.2,1);
 }
 
@@ -225,39 +228,57 @@ section[data-testid="stSidebar"]:hover::after { opacity: 0; }
    OPTION A — SLIM HERO TOPBAR
 ══════════════════════════════════════════════════════ */
 .ds-header-slim {
-    background: linear-gradient(135deg, #0a0f1e 0%, #0f1f3d 100%);
-    border: 1px solid rgba(59,130,246,0.22);
+    background: linear-gradient(135deg, #020617 0%, #0f1f4a 60%, #0f172a 100%);
+    border: 1px solid rgba(59,130,246,0.18);
     border-radius: 14px;
-    padding: 11px 18px;
+    padding: 13px 20px;
     margin-bottom: 10px;
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-    box-shadow: 0 2px 16px rgba(0,0,0,0.28);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03);
     animation: fadeInUp 0.4s cubic-bezier(0.22,1,0.36,1) both;
+    position: relative; overflow: hidden;
+}
+.ds-header-slim::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
 }
 .ds-header-slim h1 {
-    font-size: 1.05rem; font-weight: 900; margin: 0;
-    letter-spacing: -0.02em; white-space: nowrap;
-    background: linear-gradient(135deg, #ffffff 0%, #93c5fd 100%);
+    font-size: 1.1rem; font-weight: 900; margin: 0;
+    letter-spacing: -0.03em; white-space: nowrap;
+    color: #ffffff;
+    position: relative; z-index: 1;
+}
+.ds-header-slim h1 .logo-dos {
+    background: linear-gradient(135deg, #f59e0b, #fcd34d);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     background-clip: text;
 }
-.ds-slim-sep { color: rgba(148,163,184,0.3); font-size: 1rem; flex-shrink: 0; }
-.ds-slim-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.ds-slim-sep { color: rgba(148,163,184,0.2); font-size: 1rem; flex-shrink: 0; position: relative; z-index:1; }
+.ds-slim-pills { display: flex; gap: 5px; flex-wrap: wrap; position: relative; z-index:1; }
 .ds-slim-pill {
-    font-size: .58rem; font-weight: 700; padding: 3px 9px;
-    border-radius: 99px; background: rgba(255,255,255,0.07);
-    color: #93c5fd !important; border: 1px solid rgba(59,130,246,0.3);
+    font-size: .58rem; font-weight: 700; padding: 3px 10px;
+    border-radius: 99px; background: rgba(255,255,255,0.05);
+    color: #93c5fd !important; border: 1px solid rgba(59,130,246,0.25);
     text-transform: uppercase; letter-spacing: .7px; white-space: nowrap;
 }
 .ds-slim-pill.green {
-    background: rgba(34,197,94,0.1) !important;
-    color: #4ade80 !important;
-    border-color: rgba(34,197,94,0.3) !important;
+    background: rgba(16,185,129,0.1) !important;
+    color: #34d399 !important;
+    border-color: rgba(16,185,129,0.25) !important;
 }
-.ds-slim-stats { margin-left: auto; display: flex; gap: 18px; flex-shrink: 0; }
+.ds-slim-pill.amber {
+    background: rgba(245,158,11,0.1) !important;
+    color: #fcd34d !important;
+    border-color: rgba(245,158,11,0.25) !important;
+}
+.ds-slim-stats { margin-left: auto; display: flex; gap: 20px; flex-shrink: 0; position: relative; z-index:1; }
 .ds-slim-stat { text-align: center; }
-.ds-slim-stat-val { font-size: .95rem; font-weight: 900; color: #60a5fa; line-height: 1; }
-.ds-slim-stat-lbl { font-size: .52rem; color: #64748b; text-transform: uppercase; letter-spacing: .6px; margin-top: 1px; }
+.ds-slim-stat-val { font-size: 1rem; font-weight: 900; color: #f59e0b; line-height: 1; letter-spacing: -0.03em; }
+.ds-slim-stat-lbl { font-size: .5rem; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: .8px; margin-top: 2px; }
 
 /* ══════════════════════════════════════════════════════
    PHASE 3 — SECTION HEADERS (redesigned)
@@ -588,8 +609,8 @@ h1, h2, h3 { color: #0f172a; font-weight: 700; }
 ══════════════════════════════════════════════════════ */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: #2563eb; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #1d4ed8; }
 
 /* ══════════════════════════════════════════════════════
    PHASE 3 — MOBILE RESPONSIVE (enhanced)
@@ -1471,7 +1492,7 @@ def _generate_pdf_report(rows: list[dict]) -> bytes:
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 14)
         pdf.set_xy(10, 5)
-        pdf.cell(190, 12, "CarrierPulse  -  Carrier Intelligence Report", align="C")
+        pdf.cell(190, 12, "DispatchDOS  -  Carrier Intelligence Report", align="C")
 
         # Carrier name
         pdf.set_text_color(15, 23, 42)
@@ -1596,7 +1617,7 @@ def _generate_pdf_report(rows: list[dict]) -> bytes:
         pdf.set_text_color(148, 163, 184)
         pdf.set_font("Helvetica", "", 7)
         pdf.set_xy(10, 286)
-        pdf.cell(95, 5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}  |  CarrierPulse")
+        pdf.cell(95, 5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}  |  DispatchDOS")
         pdf.set_xy(105, 286)
         pdf.cell(95, 5, "Data source: safer.fmcsa.dot.gov  |  Public government records", align="R")
 
@@ -2488,7 +2509,7 @@ with st.sidebar:
         '<div style="text-align:center;padding:18px 0 10px">'
         '<span class="truck-icon" style="font-size:2.8rem">🚛</span><br>'
         '<span style="font-size:1.05rem;font-weight:700;color:#f1f5f9">'
-        'CarrierPulse</span><br>'
+        'DispatchDOS</span><br>'
         '<span style="font-size:.75rem;color:#64748b">Carrier Intelligence Platform</span>'
         '</div>',
         unsafe_allow_html=True,
@@ -2863,7 +2884,7 @@ def _render_canada_tab() -> None:
       <h1>🇨🇦 Canada Carrier Lookup</h1>
       <span class="ds-slim-sep">|</span>
       <div class="ds-slim-pills">
-        <span class="ds-slim-pill">CarrierPulse™</span>
+        <span class="ds-slim-pill amber">DispatchDOS™</span>
         <span class="ds-slim-pill green">✓ Live FMCSA Data</span>
         <span class="ds-slim-pill">Cross-Border Carriers</span>
       </div>
@@ -3075,10 +3096,10 @@ with _tab_fmcsa:
     # ── Slim Hero Topbar ──────────────────────────────────────────────────────────
     st.markdown("""
     <div class="ds-header-slim">
-      <h1>🚛 FMCSA Bulk Carrier Lookup</h1>
+      <h1>🚛 Dispatch<span class="logo-dos">DOS</span> — FMCSA Bulk Lookup</h1>
       <span class="ds-slim-sep">|</span>
       <div class="ds-slim-pills">
-        <span class="ds-slim-pill">⚡ CarrierPulse™</span>
+        <span class="ds-slim-pill amber">⚡ DispatchDOS™</span>
         <span class="ds-slim-pill green">✓ Live FMCSA Data</span>
         <span class="ds-slim-pill">🔒 Public Records</span>
       </div>
@@ -4240,7 +4261,7 @@ with _tab_fmcsa:
                             _cc1.download_button(
                                 "📄  Download Comparison PDF",
                                 data=st.session_state[_cmp_pdf_key],
-                                file_name=f"CarrierPulse_Compare_{ts}.pdf",
+                                file_name=f"DispatchDOS_Compare_{ts}.pdf",
                                 mime="application/pdf",
                                 key="dl_cmp_pdf",
                             )
@@ -4327,7 +4348,7 @@ with _tab_fmcsa:
         st.markdown("<br>", unsafe_allow_html=True)
         dl_col, active_col, pdf_col, retry_col, new_col = st.columns([3, 3, 3, 2, 2])
 
-        filename = f"CarrierPulse_FMCSA_{ts}.xlsx"
+        filename = f"DispatchDOS_FMCSA_{ts}.xlsx"
     
         # Build Excel if not already built (e.g. after a stop)
         if st.session_state.output_bytes is None and rows:
@@ -4354,7 +4375,7 @@ with _tab_fmcsa:
             active_col.download_button(
                 f"🟢  Active Only ({len(active_rows)})",
                 data=active_csv,
-                file_name=f"CarrierPulse_Active_{ts}.csv",
+                file_name=f"DispatchDOS_Active_{ts}.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
@@ -4375,7 +4396,7 @@ with _tab_fmcsa:
                 pdf_col.download_button(
                     f"📄  Download Bulk PDF ({_n_pdf})",
                     data=st.session_state.pdf_bytes_cache,
-                    file_name=f"CarrierPulse_BulkReport_{ts}.pdf",
+                    file_name=f"DispatchDOS_BulkReport_{ts}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
                     key="dl_pdf",
@@ -4438,7 +4459,7 @@ with _tab_fmcsa:
         <div class="footer-brand">
           <span style="font-size:1.6rem">🚛</span>
           <div>
-            <div class="footer-brand-name">CarrierPulse</div>
+            <div class="footer-brand-name">DispatchDOS</div>
             <div class="footer-brand-tag">Carrier Intelligence Platform</div>
           </div>
         </div>
