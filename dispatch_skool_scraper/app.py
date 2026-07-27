@@ -3063,7 +3063,7 @@ def _render_canada_tab() -> None:
             st.download_button(
                 "📥 Download Excel",
                 data=_wb_buf.read(),
-                file_name=f"canada_carriers_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                file_name=f"DispatchDOS_Canada_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
             )
@@ -3072,7 +3072,7 @@ def _render_canada_tab() -> None:
             st.download_button(
                 "📥 Download CSV",
                 data=csv_bytes,
-                file_name=f"canada_carriers_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                file_name=f"DispatchDOS_Canada_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
                 type="primary",
             )

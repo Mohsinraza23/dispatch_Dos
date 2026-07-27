@@ -1,7 +1,7 @@
 """
 ai_tab.py
 ---------
-CarrierPulse — AI Universal Scraper Tab UI.
+DispatchDOS — AI Universal Scraper Tab UI.
 
 Renders the complete "🤖 AI Scraper" tab in the Streamlit app.
 Called from app.py when user switches to AI mode.
