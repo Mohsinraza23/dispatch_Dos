@@ -76,11 +76,43 @@ def _warm_session(session: Any) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="DispatchDOS — FMCSA Carrier Verification",
+    page_title="DispatchDOS — AI-Powered Carrier Intelligence",
     page_icon="🚛",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ── Supabase usage tracking ───────────────────────────────────────────────────
+_SUPABASE_URL     = "https://gypnleqdpxstkclmouqb.supabase.co"
+_SUPABASE_ANON    = "sb_publishable_TJTD4r0uvo2DrhMXIfvR0A_XNw_Pa5H"
+
+# Read auth token from URL on first load (passed by dashboard)
+if "_auth_token" not in st.session_state:
+    st.session_state["_auth_token"] = st.query_params.get("token", "")
+
+def _check_limit(token: str, n: int) -> dict:
+    """Call Supabase use_lookup RPC. Returns {allowed, used, limit, plan}."""
+    if not token:
+        return {"allowed": True, "used": 0, "limit": 30, "plan": "free"}
+    try:
+        import requests as _req
+        r = _req.post(
+            f"{_SUPABASE_URL}/rest/v1/rpc/use_lookup",
+            json={"n": n},
+            headers={
+                "apikey": _SUPABASE_ANON,
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            timeout=8,
+        )
+        data = r.json()
+        if isinstance(data, dict) and "allowed" in data:
+            return data
+        # Unexpected response — allow (don't punish user for our error)
+        return {"allowed": True, "used": 0, "limit": 999, "plan": "unknown"}
+    except Exception:
+        return {"allowed": True, "used": 0, "limit": 999, "plan": "unknown"}
 
 
 # ── Auto-install Playwright Chromium (needed on Streamlit Cloud) ──────────────
@@ -3570,6 +3602,20 @@ with _tab_fmcsa:
             btn_col, _ = st.columns([2, 6])
             if btn_col.button("▶  Start Scraping", type="primary",
                               use_container_width=True, key="btn_start"):
+                # ── Check lookup limit ────────────────────────────────────────
+                _token = st.session_state.get("_auth_token", "")
+                _limit_res = _check_limit(_token, n_carriers)
+                if not _limit_res.get("allowed", True):
+                    _used  = _limit_res.get("used", 0)
+                    _lim   = _limit_res.get("limit", 30)
+                    _plan  = _limit_res.get("plan", "free")
+                    st.error(
+                        f"Lookup limit reached — {_used}/{_lim} used this month "
+                        f"(plan: {_plan}). "
+                        f"[Upgrade at dispatchdos.com/pricing](https://dispatchdos.com/pricing) "
+                        f"to continue."
+                    )
+                    st.stop()
                 # Initialise runtime objects
                 lq = queue.Queue()
                 pq = queue.Queue()
