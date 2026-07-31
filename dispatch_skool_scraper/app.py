@@ -3114,7 +3114,7 @@ def _render_canada_tab() -> None:
 
 
 # ── Tabs ────────────────────────────────────────────────────────────────────────
-_tab_fmcsa, _tab_canada, _tab_ai = st.tabs(["🚛 FMCSA Scraper", "🇨🇦 Canada Scraper", "🤖 AI Scraper"])
+_tab_fmcsa, _tab_canada, _tab_ai = st.tabs(["🚛 Carrier Lookup", "🇨🇦 Canada Lookup", "🤖 AI Assistant"])
 
 with _tab_ai:
     from ai_scraper_engine import _ENV_GROQ_KEY as _groq_key
