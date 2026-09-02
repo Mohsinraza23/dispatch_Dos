@@ -2636,10 +2636,11 @@ with st.sidebar:
     else:
         _pw_msg_safe = _html.escape(_PW_ENGINE_MSG, quote=True)
         st.markdown(
-            f'<div style="font-size:.72rem;color:#f59e0b;margin-bottom:6px" '
-            f'title="{_pw_msg_safe}">'
+            f'<div style="font-size:.72rem;color:#f59e0b;margin-bottom:2px">'
             f'🟠 Browser engine unavailable — using HTTP only '
-            f'(higher block risk, retrying in background)</div>',
+            f'(higher block risk, retrying in background)</div>'
+            f'<div style="font-size:.65rem;color:#94a3b8;margin-bottom:6px;'
+            f'word-break:break-word">{_pw_msg_safe}</div>',
             unsafe_allow_html=True,
         )
 
