@@ -17,6 +17,7 @@ Install:
 from __future__ import annotations
 
 # ── stdlib ────────────────────────────────────────────────────────────────────
+import html as _html
 import io
 import os
 import re
@@ -121,6 +122,15 @@ def _check_limit(token: str, n: int) -> dict:
 # with zero retry and zero visibility — every scrape then silently fell back to
 # plain HTTP requests, which FMCSA blocks aggressively at volume. TTL lets it
 # self-heal on the next rerun instead of staying broken until redeploy.
+def _clean_subprocess_err(raw: str, limit: int = 300) -> str:
+    """Strip pip's routine '[notice] new release available' nag lines so the
+    real error (often near the end of stderr, not the start) stays visible
+    instead of being pushed out by truncation."""
+    lines = [ln for ln in raw.splitlines() if ln.strip() and not ln.strip().startswith("[notice]")]
+    cleaned = " ".join(lines) or raw
+    return cleaned[-limit:].strip()
+
+
 @st.cache_resource(show_spinner=False, ttl=600)
 def _install_playwright() -> tuple[bool, str]:
     import sys
@@ -132,16 +142,16 @@ def _install_playwright() -> tuple[bool, str]:
             capture_output=True, text=True, timeout=180
         )
         if pip_r.returncode != 0:
-            return False, f"pip install failed: {pip_r.stderr[:200]}"
+            return False, f"pip install failed: {_clean_subprocess_err(pip_r.stderr)}"
         # Use python -m playwright to avoid PATH issues with newly installed CLI
         # Note: system deps (libnss3 etc.) are pre-installed via packages.txt
         # so --with-deps is NOT used here (would fail on Streamlit Cloud)
         r = subprocess.run(
             [sys.executable, "-m", "playwright", "install", "chromium"],
-            capture_output=True, text=True, timeout=300
+            capture_output=True, text=True, timeout=420
         )
         if r.returncode != 0:
-            return False, r.stderr[:200]
+            return False, f"chromium install failed: {_clean_subprocess_err(r.stderr)}"
         # Verify the browser actually launches — catches partial/corrupt
         # downloads that "install" reports as successful but can't run.
         from playwright.sync_api import sync_playwright
@@ -150,7 +160,7 @@ def _install_playwright() -> tuple[bool, str]:
             _b.close()
         return True, "ok"
     except Exception as e:
-        return False, str(e)[:200]
+        return False, str(e)[:300]
 
 _PW_ENGINE_OK, _PW_ENGINE_MSG = _install_playwright()
 
@@ -2599,9 +2609,10 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
     else:
+        _pw_msg_safe = _html.escape(_PW_ENGINE_MSG, quote=True)
         st.markdown(
             f'<div style="font-size:.72rem;color:#f59e0b;margin-bottom:6px" '
-            f'title="{_PW_ENGINE_MSG}">'
+            f'title="{_pw_msg_safe}">'
             f'🟠 Browser engine unavailable — using HTTP only '
             f'(higher block risk, retrying in background)</div>',
             unsafe_allow_html=True,
