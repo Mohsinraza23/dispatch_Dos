@@ -116,8 +116,13 @@ def _check_limit(token: str, n: int) -> dict:
 
 
 # ── Auto-install Playwright Chromium (needed on Streamlit Cloud) ──────────────
-@st.cache_resource(show_spinner=False)
-def _install_playwright() -> str:
+# Cached with a TTL (not forever): a failed install (network blip, cold-start
+# timeout) used to be cached as "failed" for the entire container's lifetime
+# with zero retry and zero visibility — every scrape then silently fell back to
+# plain HTTP requests, which FMCSA blocks aggressively at volume. TTL lets it
+# self-heal on the next rerun instead of staying broken until redeploy.
+@st.cache_resource(show_spinner=False, ttl=600)
+def _install_playwright() -> tuple[bool, str]:
     import sys
     try:
         # Install playwright package at runtime (not in requirements.txt due to
@@ -127,7 +132,7 @@ def _install_playwright() -> str:
             capture_output=True, text=True, timeout=180
         )
         if pip_r.returncode != 0:
-            return f"pip install failed: {pip_r.stderr[:200]}"
+            return False, f"pip install failed: {pip_r.stderr[:200]}"
         # Use python -m playwright to avoid PATH issues with newly installed CLI
         # Note: system deps (libnss3 etc.) are pre-installed via packages.txt
         # so --with-deps is NOT used here (would fail on Streamlit Cloud)
@@ -135,11 +140,19 @@ def _install_playwright() -> str:
             [sys.executable, "-m", "playwright", "install", "chromium"],
             capture_output=True, text=True, timeout=300
         )
-        return "ok" if r.returncode == 0 else r.stderr[:200]
+        if r.returncode != 0:
+            return False, r.stderr[:200]
+        # Verify the browser actually launches — catches partial/corrupt
+        # downloads that "install" reports as successful but can't run.
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as _p:
+            _b = _p.chromium.launch(headless=True, args=["--no-sandbox"])
+            _b.close()
+        return True, "ok"
     except Exception as e:
-        return str(e)
+        return False, str(e)[:200]
 
-_install_playwright()
+_PW_ENGINE_OK, _PW_ENGINE_MSG = _install_playwright()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2579,9 +2592,24 @@ with st.sidebar:
 
     st.markdown('<div class="sb-lbl">🛡️ Options</div>', unsafe_allow_html=True)
 
+    if _PW_ENGINE_OK:
+        st.markdown(
+            '<div style="font-size:.72rem;color:#22c55e;margin-bottom:6px">'
+            '🟢 Browser engine active — bypasses IP blocking</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div style="font-size:.72rem;color:#f59e0b;margin-bottom:6px" '
+            f'title="{_PW_ENGINE_MSG}">'
+            f'🟠 Browser engine unavailable — using HTTP only '
+            f'(higher block risk, retrying in background)</div>',
+            unsafe_allow_html=True,
+        )
+
     playwright_fallback = st.toggle(
-        "Browser fallback", value=False,
-        help="Use a real browser if the fast method gets blocked (experimental).",
+        "Browser fallback", value=True,
+        help="Use a real browser if the fast method gets blocked (recommended for large batches).",
     )
 
     st.markdown('<div class="sb-lbl">🔄 Proxy (optional)</div>', unsafe_allow_html=True)
