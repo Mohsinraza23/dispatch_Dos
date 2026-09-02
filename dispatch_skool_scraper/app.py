@@ -72,6 +72,30 @@ def _warm_session(session: Any) -> None:
         pass   # warmup failure is non-fatal
 
 
+def _parse_proxy_for_playwright(proxy_url: str | None) -> dict[str, str] | None:
+    """Convert a 'http://user:pass@host:port' proxy string (requests-style,
+    same field used by the sidebar and by Path B) into Playwright's
+    {server, username, password} context-proxy format. A rotating-gateway
+    proxy URL (one endpoint, IP rotates per request server-side) works here
+    unchanged — that's the recommended way to avoid single-IP blocking."""
+    if not proxy_url:
+        return None
+    from urllib.parse import urlparse
+    try:
+        p = urlparse(proxy_url)
+        if not p.hostname:
+            return None
+        server = f"{p.scheme or 'http'}://{p.hostname}" + (f":{p.port}" if p.port else "")
+        cfg: dict[str, str] = {"server": server}
+        if p.username:
+            cfg["username"] = p.username
+        if p.password:
+            cfg["password"] = p.password
+        return cfg
+    except Exception:
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Page config  ← must be FIRST Streamlit call
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2031,6 +2055,7 @@ def _scraper_thread(
             ),
             locale="en-US",
             timezone_id="America/Chicago",
+            proxy=_parse_proxy_for_playwright(settings.get("proxy")),
             extra_http_headers={
                 "Accept-Language":           "en-US,en;q=0.9",
                 "Referer":                   "https://safer.fmcsa.dot.gov/",
@@ -2626,7 +2651,13 @@ with st.sidebar:
     st.markdown('<div class="sb-lbl">🔄 Proxy (optional)</div>', unsafe_allow_html=True)
     proxy_input = st.text_input(
         "Proxy URL", value="", placeholder="http://user:pass@host:port",
-        help="Optional HTTP/HTTPS proxy. Leave blank to use your direct IP.",
+        help=(
+            "Strongly recommended for large batches (1000+ carriers) without an "
+            "FMCSA API key. A rotating-proxy gateway URL works best — one endpoint "
+            "here, IP rotates per request on the provider's side, so FMCSA sees "
+            "many different IPs instead of one being blocked. Leave blank to use "
+            "your direct IP."
+        ),
         label_visibility="collapsed",
     )
     if proxy_input.strip():
