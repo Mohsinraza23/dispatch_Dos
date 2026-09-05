@@ -210,8 +210,8 @@ def _execute_scraping(intent_data: dict, groq_key: str) -> None:
             st.session_state.ai_pending_intent = None
             return
 
-        _add_msg("ai", f"🚛 {len(ids)} carrier(s) FMCSA se scrape ho rahe hain... ruko.")
-        with st.spinner(f"FMCSA se {len(ids)} carrier(s) scrape ho rahe hain..."):
+        _add_msg("ai", f"🚛 {len(ids)} carrier(s) scrape ho rahe hain... ruko.")
+        with st.spinner(f"{len(ids)} carrier(s) scrape ho rahe hain..."):
             results = scrape_fmcsa_carriers(ids)
 
         found = sum(1 for r in results if r.get("status") == "found")
@@ -315,7 +315,7 @@ def render_ai_tab(groq_key: str = "") -> None:
 <div class="stats-bar">
   <div class="stat-card sc-blue">
     <span class="sc-icon">🚛</span>
-    <div class="sc-val">FMCSA</div>
+    <div class="sc-val">Carrier</div>
     <div class="sc-lbl">Carrier Lookup</div>
     <div class="sc-sub">USDOT / MC numbers</div>
   </div>
@@ -337,7 +337,7 @@ def render_ai_tab(groq_key: str = "") -> None:
     # ── Examples ──────────────────────────────────────────────────────────────
     with st.expander("💡 Examples — Kya likh ya bol sakte hain"):
         st.markdown("""
-**FMCSA Carrier Lookup:**
+**Carrier Lookup:**
 - `USDOT 1597181 ka data chahiye`
 - `MC193369 aur MC456789 ke baare mein batao`
 - `Give me carrier info for USDOT 793594`
@@ -370,7 +370,7 @@ def render_ai_tab(groq_key: str = "") -> None:
             ids_preview = ", ".join(ids[:6]) + ("..." if len(ids) > 6 else "")
             st.markdown(
                 f'<div class="ai-intent-card">'
-                f'<b>🚛 FMCSA Scraping Ready:</b><br>'
+                f'<b>🚛 Carrier Scraping Ready:</b><br>'
                 f'Carriers: <code>{ids_preview}</code><br>'
                 f'Total: <b>{len(ids)}</b> carrier(s)'
                 f'</div>',
@@ -561,7 +561,7 @@ def render_ai_tab(groq_key: str = "") -> None:
 
             st.caption(
                 f"{len(data)} records · "
-                f"{'FMCSA' if is_fmcsa else 'Web'} scrape · "
+                f"{'Carrier' if is_fmcsa else 'Web'} scrape · "
                 f"{datetime.now().strftime('%Y-%m-%d %H:%M')}"
             )
 

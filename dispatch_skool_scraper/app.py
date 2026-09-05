@@ -1,7 +1,7 @@
 """
 app.py
 ──────
-DispatchDOS — FMCSA Bulk Scraper  ·  Streamlit Web App
+Movus Data Scraper — Carrier Data Bulk Scraper  ·  Streamlit Web App
 
 Run:
     streamlit run app.py
@@ -121,7 +121,7 @@ def _parse_proxy_for_playwright(proxy_url: str | None) -> dict[str, str] | None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="DispatchDOS — AI-Powered Carrier Intelligence",
+    page_title="Movus Data Scraper — AI-Powered Carrier Intelligence",
     page_icon="🚛",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -1500,7 +1500,7 @@ body.ds-dark [data-testid="stDataFrame"] {
 
 def _compute_risk_score(row: dict) -> tuple[int, str]:
     """
-    Score a carrier 0-100 based on scraped FMCSA data.
+    Score a carrier 0-100 based on scraped carrier data.
     Returns (score, level) where level = 'safe' | 'caution' | 'high_risk'.
     """
     score = 50  # neutral start
@@ -1624,7 +1624,7 @@ def _generate_pdf_report(rows: list[dict]) -> bytes:
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 14)
         pdf.set_xy(10, 5)
-        pdf.cell(190, 12, "DispatchDOS  -  Carrier Intelligence Report", align="C")
+        pdf.cell(190, 12, "Movus Data Scraper  -  Carrier Intelligence Report", align="C")
 
         # Carrier name
         pdf.set_text_color(15, 23, 42)
@@ -1749,7 +1749,7 @@ def _generate_pdf_report(rows: list[dict]) -> bytes:
         pdf.set_text_color(148, 163, 184)
         pdf.set_font("Helvetica", "", 7)
         pdf.set_xy(10, 286)
-        pdf.cell(95, 5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}  |  DispatchDOS")
+        pdf.cell(95, 5, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}  |  Movus Data Scraper")
         pdf.set_xy(105, 286)
         pdf.cell(95, 5, "Data source: safer.fmcsa.dot.gov  |  Public government records", align="R")
 
@@ -2088,6 +2088,7 @@ def _scraper_thread(
         })
 
     total          = len(carrier_ids)
+    _log("info", f"🎯 Movus Data Scraper — scraping {total} carrier(s)…")
     flat_rows: list[dict[str, str] | None] = [None] * total
     lock           = threading.Lock()
     completed      = [0]
@@ -2142,7 +2143,7 @@ def _scraper_thread(
                  wait_until="domcontentloaded", timeout=30_000)
         _wp.close()
         _pw_ok = True
-        _log("success", "✓ Real browser ready — FMCSA IP blocking bypassed")
+        _log("success", "✓ Real browser ready — IP blocking bypassed")
     except Exception as _e:
         _log("warn", f"Browser unavailable ({str(_e)[:80]}) — using HTTP fallback")
         for _obj in [_pw_browser, _pw_obj]:
@@ -2234,9 +2235,11 @@ def _scraper_thread(
             scrape_status = row["Scrape_Status"]
 
             if scrape_status == "Success":
-                _log("success",
-                     f"  ✓  {row['Legal_Name'] or cid} "
-                     f"| USDOT {row['USDOT_Number']} | {row['Carrier_Status']}")
+                if row["Carrier_Status"] == "ACTIVE":
+                    _log("success",
+                         f"  ✓  {row['Legal_Name'] or cid} "
+                         f"| USDOT {row['USDOT_Number']} | {row['Carrier_Status']}")
+                # else: inactive/OOS carrier — kept in results, hidden from the live log
             elif scrape_status == "Not_Found":
                 _log("warn",  f"  ✗  {cid}  → Not Found")
             elif scrape_status == "Blocked":
@@ -2325,7 +2328,7 @@ def _scraper_thread(
                 res = {"status": "error", "error_detail": str(exc)}
 
             if res.get("fetch_method") == "api":
-                _log("info", "  → FMCSA API used")
+                _log("info", "  → Official API used")
 
             if res.get("status") == "not_found" and not skip_type_retry:
                 _log("warn", f"  Not found as {primary} → retrying as {fallback} …")
@@ -2349,9 +2352,11 @@ def _scraper_thread(
             scrape_status = row["Scrape_Status"]
 
             if scrape_status == "Success":
-                _log("success",
-                     f"  ✓  {row['Legal_Name'] or cid} "
-                     f"| USDOT {row['USDOT_Number']} | {row['Carrier_Status']}")
+                if row["Carrier_Status"] == "ACTIVE":
+                    _log("success",
+                         f"  ✓  {row['Legal_Name'] or cid} "
+                         f"| USDOT {row['USDOT_Number']} | {row['Carrier_Status']}")
+                # else: inactive/OOS carrier — kept in results, hidden from the live log
                 with lock:
                     conn_failures[0] = 0
             elif scrape_status == "Not_Found":
@@ -2369,7 +2374,7 @@ def _scraper_thread(
                         if conn_failures[0] >= 3 and not _IP_BLOCK_WARNED[0]:
                             _IP_BLOCK_WARNED[0] = True
                             _log("error",
-                                 "⚠️  FMCSA is blocking this IP — "
+                                 "⚠️  This IP is being blocked — "
                                  "try again later or use smaller batches.")
                     else:
                         conn_failures[0] = 0
@@ -2687,7 +2692,7 @@ with st.sidebar:
         '<div style="text-align:center;padding:18px 0 10px">'
         '<span class="truck-icon" style="font-size:2.8rem">🚛</span><br>'
         '<span style="font-size:1.05rem;font-weight:700;color:#f1f5f9">'
-        'DispatchDOS</span><br>'
+        'Movus Data Scraper</span><br>'
         '<span style="font-size:.75rem;color:#64748b">Carrier Intelligence Platform</span>'
         '</div>',
         unsafe_allow_html=True,
@@ -2697,15 +2702,15 @@ with st.sidebar:
     st.markdown('<div class="sb-lbl">⚙️ Scraper Settings</div>', unsafe_allow_html=True)
 
     delay_min = st.slider("Min delay (seconds)", 2, 40, 5, 1,
-                          help="Min pause between FMCSA requests.")
+                          help="Min pause between carrier data requests.")
     delay_max = st.slider("Max delay (seconds)", delay_min, 60,
                           max(12, delay_min + 5), 1,
-                          help="Max pause between FMCSA requests.")
+                          help="Max pause between carrier data requests.")
 
-    st.markdown('<div class="sb-lbl">🔑 FMCSA API Key (Recommended)</div>',
+    st.markdown('<div class="sb-lbl">🔑 Carrier Data API Key (Recommended)</div>',
                 unsafe_allow_html=True)
     fmcsa_web_key = st.text_input(
-        "FMCSA Web Key", value="", type="password",
+        "Carrier Data Web Key", value="", type="password",
         placeholder="Paste your free API key here",
         help="Get a FREE key at li.fmcsa.dot.gov — bypasses IP blocking completely.",
         label_visibility="collapsed",
@@ -2751,9 +2756,9 @@ with st.sidebar:
     proxy_input = st.text_input(
         "Proxy URL", value="", placeholder="http://user:pass@host:port",
         help=(
-            "Strongly recommended for large batches (1000+ carriers) without an "
-            "FMCSA API key. A rotating-proxy gateway URL works best — one endpoint "
-            "here, IP rotates per request on the provider's side, so FMCSA sees "
+            "Strongly recommended for large batches (1000+ carriers) without a "
+            "carrier data API key. A rotating-proxy gateway URL works best — one endpoint "
+            "here, IP rotates per request on the provider's side, so the target site sees "
             "many different IPs instead of one being blocked. Leave blank to use "
             "your direct IP."
         ),
@@ -3087,8 +3092,8 @@ def _render_canada_tab() -> None:
       <h1>🇨🇦 Canada Carrier Lookup</h1>
       <span class="ds-slim-sep">|</span>
       <div class="ds-slim-pills">
-        <span class="ds-slim-pill amber">DispatchDOS™</span>
-        <span class="ds-slim-pill green">✓ Live FMCSA Data</span>
+        <span class="ds-slim-pill amber">Movus Data Scraper™</span>
+        <span class="ds-slim-pill green">✓ Live Carrier Data</span>
         <span class="ds-slim-pill">Cross-Border Carriers</span>
       </div>
     </div>
@@ -3096,7 +3101,7 @@ def _render_canada_tab() -> None:
 
     st.info(
         "**How it works:** Canadian carriers that operate in the US are registered in "
-        "the FMCSA SAFER database. Search by company name to find them and get full "
+        "the official carrier safety database. Search by company name to find them and get full "
         "safety profiles — same 30+ fields as US carriers.",
         icon="ℹ️",
     )
@@ -3132,7 +3137,7 @@ def _render_canada_tab() -> None:
         do_search = st.button("🔍 Search Canada", type="primary", key="ca_search_btn", use_container_width=True)
 
     if do_search and ca_query.strip():
-        with st.spinner("Searching FMCSA for Canadian carriers..."):
+        with st.spinner("Searching for Canadian carriers..."):
             try:
                 from canada_scraper import search_canada_carriers
                 found = search_canada_carriers(ca_query.strip(), max_results=int(ca_max))
@@ -3266,7 +3271,7 @@ def _render_canada_tab() -> None:
             st.download_button(
                 "📥 Download Excel",
                 data=_wb_buf.read(),
-                file_name=f"DispatchDOS_Canada_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                file_name=f"MovusDataScraper_Canada_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
             )
@@ -3275,7 +3280,7 @@ def _render_canada_tab() -> None:
             st.download_button(
                 "📥 Download CSV",
                 data=csv_bytes,
-                file_name=f"DispatchDOS_Canada_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                file_name=f"MovusDataScraper_Canada_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
                 type="primary",
             )
@@ -3299,11 +3304,11 @@ with _tab_fmcsa:
     # ── Slim Hero Topbar ──────────────────────────────────────────────────────────
     st.markdown("""
     <div class="ds-header-slim">
-      <h1>🚛 Dispatch<span class="logo-dos">DOS</span> — FMCSA Bulk Lookup</h1>
+      <h1>🚛 Movus<span class="logo-dos"> Data Scraper</span> — Carrier Bulk Lookup</h1>
       <span class="ds-slim-sep">|</span>
       <div class="ds-slim-pills">
-        <span class="ds-slim-pill amber">⚡ DispatchDOS™</span>
-        <span class="ds-slim-pill green">✓ Live FMCSA Data</span>
+        <span class="ds-slim-pill amber">⚡ Movus Data Scraper™</span>
+        <span class="ds-slim-pill green">✓ Live Carrier Data</span>
         <span class="ds-slim-pill">🔒 Public Records</span>
       </div>
       <div class="ds-slim-stats">
@@ -3404,7 +3409,7 @@ with _tab_fmcsa:
           <ul>
             <li>Plain numbers (<code>1597181</code>) or prefixed (<code>MC193369</code>) — both work</li>
             <li>Tool auto-detects USDOT vs MC and retries if not found</li>
-            <li>Add a free FMCSA API key (sidebar) to bypass IP blocking completely</li>
+            <li>Add a free API key (sidebar) to bypass IP blocking completely</li>
             <li>Enable <b>Browser Fallback</b> in sidebar if you see many Blocked results</li>
           </ul>
         </div>
@@ -3429,7 +3434,7 @@ with _tab_fmcsa:
         steps = [
             ("1", "Load List",  "Paste / Upload IDs"),
             ("2", "Preview",    "Dedup & review"),
-            ("3", "Scraping",   "Live FMCSA fetch"),
+            ("3", "Scraping",   "Live carrier data fetch"),
             ("4", "Download",   "Excel + CSV ready"),
         ]
     
@@ -3740,7 +3745,7 @@ with _tab_fmcsa:
     
     if st.session_state.carrier_ids:
         st.markdown('<hr class="div">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">🚀 Step 3 — Scrape FMCSA</div>',
+        st.markdown('<div class="sec-head">🚀 Step 3 — Scrape Carriers</div>',
                     unsafe_allow_html=True)
     
         n_carriers   = len(st.session_state.carrier_ids)
@@ -3913,7 +3918,7 @@ with _tab_fmcsa:
             )
     
             # Live log
-            with st.expander("📋 Live Logs", expanded=True):
+            with st.expander("📋 Movus Data Scraper — Live Logs", expanded=True):
                 last_120 = "".join(st.session_state.log_lines[-120:])
                 st.markdown(
                     f'<div class="log-box">{last_120}</div>',
@@ -4482,7 +4487,7 @@ with _tab_fmcsa:
                             _cc1.download_button(
                                 "📄  Download Comparison PDF",
                                 data=st.session_state[_cmp_pdf_key],
-                                file_name=f"DispatchDOS_Compare_{ts}.pdf",
+                                file_name=f"MovusDataScraper_Compare_{ts}.pdf",
                                 mime="application/pdf",
                                 key="dl_cmp_pdf",
                             )
@@ -4569,7 +4574,7 @@ with _tab_fmcsa:
         st.markdown("<br>", unsafe_allow_html=True)
         dl_col, active_col, pdf_col, retry_col, new_col = st.columns([3, 3, 3, 2, 2])
 
-        filename = f"DispatchDOS_FMCSA_{ts}.xlsx"
+        filename = f"MovusDataScraper_{ts}.xlsx"
     
         # Build Excel if not already built (e.g. after a stop)
         if st.session_state.output_bytes is None and rows:
@@ -4595,7 +4600,7 @@ with _tab_fmcsa:
             active_col.download_button(
                 f"🟢  Active Only ({len(active_rows)})",
                 data=active_csv,
-                file_name=f"DispatchDOS_Active_{ts}.csv",
+                file_name=f"MovusDataScraper_Active_{ts}.csv",
                 mime="text/csv",
                 type="primary",
                 use_container_width=True,
@@ -4617,7 +4622,7 @@ with _tab_fmcsa:
                 pdf_col.download_button(
                     f"📄  Download Bulk PDF ({_n_pdf})",
                     data=st.session_state.pdf_bytes_cache,
-                    file_name=f"DispatchDOS_BulkReport_{ts}.pdf",
+                    file_name=f"MovusDataScraper_BulkReport_{ts}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
                     key="dl_pdf",
@@ -4680,7 +4685,7 @@ with _tab_fmcsa:
         <div class="footer-brand">
           <span style="font-size:1.6rem">🚛</span>
           <div>
-            <div class="footer-brand-name">DispatchDOS</div>
+            <div class="footer-brand-name">Movus Data Scraper</div>
             <div class="footer-brand-tag">Carrier Intelligence Platform</div>
           </div>
         </div>
