@@ -10,3 +10,5 @@ DispatchSkool_*.xlsx
 DispatchDOS_*.xlsx
 DispatchDOS_*.csv
 scrape_progress.json
+.pw_runtime_deps/
+dispatch_skool_scraper/data/

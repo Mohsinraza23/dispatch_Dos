@@ -17,10 +17,12 @@ Install:
 from __future__ import annotations
 
 # ── stdlib ────────────────────────────────────────────────────────────────────
+import asyncio
 import html as _html
 import io
 import os
 import re
+import sys
 import json
 import time
 import queue
@@ -30,6 +32,23 @@ import random
 import concurrent.futures
 from datetime import datetime
 from typing import Any
+
+# Windows-only: Streamlit's server (Tornado) forces the asyncio event-loop
+# policy to Selector, which can't create subprocesses — breaks Playwright
+# with "NotImplementedError" from its Connection.run()/run_as_sync(). This
+# module gets re-executed on every Streamlit rerun (Streamlit's script-runner
+# re-runs app.py top to bottom for each interaction and each live-progress
+# poll), and _install_playwright() below is cache_resource'd with a 10-minute
+# ttl — so on a long scrape the cache can expire mid-run and re-trigger a
+# fresh sync_playwright() launch from THIS script-thread context, which is
+# separate from _scraper_thread's own background thread (patched
+# separately). Re-asserting Proactor here, at import time on every rerun,
+# covers this path too. No-op on Linux/Streamlit Cloud.
+if sys.platform == "win32":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except Exception:
+        pass
 
 # ── third-party ───────────────────────────────────────────────────────────────
 import pandas as pd
@@ -46,6 +65,7 @@ from fmcsa_scraper import (
     DEFAULT_DELAY_MAX,
 )
 from ai_tab import render_ai_tab
+import local_db
 
 _FMCSA_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -155,24 +175,53 @@ def _clean_subprocess_err(raw: str, limit: int = 300) -> str:
     return cleaned[-limit:].strip()
 
 
+# App-local fallback install dir — used only if the shared venv's
+# site-packages rejects the write (seen on Streamlit Cloud: a stale/locked
+# leftover package dir from an earlier partial install causes
+# "OSError: [Errno 13] Permission denied" on a *different* package's folder,
+# e.g. playwright's own "pyee" dependency). Installing here instead avoids
+# touching whatever is locked in the shared location.
+_PW_TARGET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pw_runtime_deps")
+
+
+def _pip_install_playwright(target_dir: str | None = None) -> subprocess.CompletedProcess:
+    import sys
+    cmd = [sys.executable, "-m", "pip", "install", "--quiet"]
+    if target_dir:
+        cmd += ["--target", target_dir]
+    cmd += ["playwright>=1.49.0"]
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+
+
 @st.cache_resource(show_spinner=False, ttl=600)
 def _install_playwright() -> tuple[bool, str]:
     import sys
     try:
         # Install playwright package at runtime (not in requirements.txt due to
         # greenlet build failures on Python 3.14 with older playwright versions)
-        pip_r = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet", "playwright>=1.49.0"],
-            capture_output=True, text=True, timeout=180
-        )
+        pip_r = _pip_install_playwright()
+        used_target = False
+
+        if pip_r.returncode != 0 and "Permission denied" in (pip_r.stderr or ""):
+            os.makedirs(_PW_TARGET_DIR, exist_ok=True)
+            pip_r = _pip_install_playwright(target_dir=_PW_TARGET_DIR)
+            used_target = pip_r.returncode == 0
+
         if pip_r.returncode != 0:
             return False, f"pip install failed: {_clean_subprocess_err(pip_r.stderr)}"
+
+        env = os.environ.copy()
+        if used_target:
+            if _PW_TARGET_DIR not in sys.path:
+                sys.path.insert(0, _PW_TARGET_DIR)
+            env["PYTHONPATH"] = _PW_TARGET_DIR + os.pathsep + env.get("PYTHONPATH", "")
+
         # Use python -m playwright to avoid PATH issues with newly installed CLI
         # Note: system deps (libnss3 etc.) are pre-installed via packages.txt
         # so --with-deps is NOT used here (would fail on Streamlit Cloud)
         r = subprocess.run(
             [sys.executable, "-m", "playwright", "install", "chromium"],
-            capture_output=True, text=True, timeout=420
+            capture_output=True, text=True, timeout=420, env=env,
         )
         if r.returncode != 0:
             return False, f"chromium install failed: {_clean_subprocess_err(r.stderr)}"
@@ -182,7 +231,7 @@ def _install_playwright() -> tuple[bool, str]:
         with sync_playwright() as _p:
             _b = _p.chromium.launch(headless=True, args=["--no-sandbox"])
             _b.close()
-        return True, "ok"
+        return True, ("ok — local target install" if used_target else "ok")
     except Exception as e:
         return False, str(e)[:300]
 
@@ -979,6 +1028,8 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 .stat-card.sc-green::before  { background: linear-gradient(90deg,#059669,#34d399); }
 .stat-card.sc-purple::before { background: linear-gradient(90deg,#7c3aed,#a78bfa); }
 .stat-card.sc-orange::before { background: linear-gradient(90deg,#d97706,#fbbf24); }
+.stat-card.sc-red::before    { background: linear-gradient(90deg,#dc2626,#f87171); }
+.stat-card.sc-slate::before  { background: linear-gradient(90deg,#475569,#94a3b8); }
 .stat-card:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 28px rgba(0,0,0,0.1);
@@ -997,6 +1048,8 @@ details      { animation: fadeInUp 0.38s cubic-bezier(0.22,1,0.36,1) both; }
 .stat-card.sc-green  .sc-val { color: #059669; }
 .stat-card.sc-purple .sc-val { color: #7c3aed; }
 .stat-card.sc-orange .sc-val { color: #d97706; }
+.stat-card.sc-red    .sc-val { color: #dc2626; }
+.stat-card.sc-slate  .sc-val { color: #64748b; }
 .stat-card .sc-lbl {
     font-size: .68rem; font-weight: 600; color: #94a3b8;
     text-transform: uppercase; letter-spacing: 1px;
@@ -1818,7 +1871,7 @@ def _init() -> None:
         "scrape_elapsed":    None,  # total seconds when run finished
         "_toast_shown":       False, # show completion toast only once
         "_wl_changes_shown":  False, # show watch list change alert only once
-        "dark_mode":          False, # dark mode toggle
+        "dark_mode":          True, # dark mode toggle (Motus-style dark-first UI)
         # Resume support
         "_resume_existing_rows": [],  # rows from previous partial run (for resume)
     }
@@ -2013,6 +2066,20 @@ def _scraper_thread(
     skip_type_retry=True skips MC fallback (used for range search).
     Auto-saves progress to disk every 50 carriers for large jobs.
     """
+    # Windows-only: Streamlit's server (Tornado) forces the asyncio event-loop
+    # policy to Selector, which can't create subprocesses — that breaks
+    # Playwright (both the sync engine below and fmcsa_scraper's async
+    # fallback), surfacing as "NotImplementedError" / "Task exception was
+    # never retrieved" from playwright's Connection.run(). Re-asserting
+    # Proactor here, right before this thread creates any event loop, fixes
+    # it without touching Tornado's own already-running server loop. No-op
+    # on Linux/Streamlit Cloud (WindowsProactorEventLoopPolicy doesn't exist).
+    if sys.platform == "win32":
+        try:
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        except Exception:
+            pass
+
     def _log(level: str, msg: str) -> None:
         log_q.put({
             "t":   datetime.now().strftime("%H:%M:%S"),
@@ -2091,6 +2158,15 @@ def _scraper_thread(
 
     # ── Playwright scrape helper ───────────────────────────────────────────
     def _pw_scrape_one(cid: str) -> dict:
+        # Local bulk-census cache first (instant, no network) — see local_db.py.
+        # A miss (None) here always falls through to API/Playwright below exactly
+        # as if this check didn't run.
+        _primary_guess = _guess_type(cid)
+        if _primary_guess in ("USDOT", "MC"):
+            local_res = local_db.lookup_local(cid, _primary_guess)
+            if local_res is not None:
+                return local_res
+
         # Try FMCSA API first if key is available (faster, never IP-blocked)
         web_key = settings.get("web_key", "")
         if web_key:
@@ -2580,6 +2656,28 @@ def _cards(*items: tuple[Any, str, str]) -> None:
     )
 
 
+def _stat_card(icon: str, val: Any, label: str, colour: str, sub: str = "") -> str:
+    sub_html = f'<div class="sc-sub">{sub}</div>' if sub else ""
+    return (
+        f'<div class="stat-card {colour}">'
+        f'<span class="sc-icon">{icon}</span>'
+        f'<div class="sc-val">{val}</div>'
+        f'<div class="sc-lbl">{label}</div>'
+        f'{sub_html}'
+        f'</div>'
+    )
+
+
+def _stat_cards(*items: tuple[str, Any, str, str]) -> None:
+    """Bold icon stat cards (Motus-style dashboard). items = (icon, val, label, colour[, sub])."""
+    st.markdown(
+        '<div class="stats-bar">' +
+        "".join(_stat_card(*it) for it in items) +
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ── SIDEBAR ──────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2798,7 +2896,7 @@ section[data-testid="stMain"] > div > div > div > div:first-child
     box-shadow: 0 2px 12px rgba(0,0,0,0.1) !important;
 }
 </style>""", unsafe_allow_html=True)
-_dark = st.toggle("🌙 Dark Mode", value=st.session_state.get("dark_mode", False), key="dark_mode")
+_dark = st.toggle("🌙 Dark Mode", value=st.session_state.get("dark_mode", True), key="dark_mode")
 
 
 if _dark:
@@ -2847,6 +2945,8 @@ code                 { background: #1e293b !important; color: #93c5fd !important
 }
 .stat-card .sc-lbl { color: #64748b !important; }
 .stat-card .sc-sub { color: #334155 !important; }
+.stat-card.sc-red   .sc-val { color: #f87171 !important; }
+.stat-card.sc-slate .sc-val { color: #94a3b8 !important; }
 
 /* ── How-to cards ── */
 .howto-card  { background: #0f172a !important; border-color: rgba(59,130,246,0.15) !important; }
@@ -3800,12 +3900,16 @@ with _tab_fmcsa:
             )
     
             # Live counter cards
-            _cards(
-                (counts["success"],   "Success",   "c-green"),
-                (counts["not_found"], "Not Found", "c-yellow"),
-                (counts["failed"],    "Failed",    "c-red"),
-                (counts["blocked"],   "Blocked",   "c-purple"),
-                (total - cur,         "Remaining", "c-slate"),
+            _stat_cards(
+                ("✅", counts["success"],   "Success",   "sc-green",
+                 f"{counts['success']/cur*100:.0f}%" if cur else ""),
+                ("❓", counts["not_found"], "Not Found", "sc-orange",
+                 f"{counts['not_found']/cur*100:.0f}%" if cur else ""),
+                ("❌", counts["failed"],    "Failed",    "sc-red",
+                 f"{counts['failed']/cur*100:.0f}%" if cur else ""),
+                ("🚫", counts["blocked"],   "Blocked",   "sc-purple",
+                 f"{counts['blocked']/cur*100:.0f}%" if cur else ""),
+                ("⏳", total - cur,         "Remaining", "sc-slate", f"of {total}"),
             )
     
             # Live log
@@ -4171,7 +4275,7 @@ with _tab_fmcsa:
         )
         status_filter = _sf2.selectbox(
             "Status",
-            ["ALL STATUS", "ACTIVE", "INACTIVE", "OUT_OF_SERVICE"],
+            ["ACTIVE", "ALL STATUS", "INACTIVE", "OUT_OF_SERVICE"],
             index=0,
             label_visibility="collapsed",
         )
@@ -4479,11 +4583,10 @@ with _tab_fmcsa:
                 data=st.session_state.output_bytes,
                 file_name=filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary",
                 use_container_width=True,
             )
-    
-        # Download Active Only as CSV
+
+        # Download Active Only as CSV — primary CTA (client only wants active carriers)
         active_rows = [r for r in rows
                        if str(r.get("Carrier_Status", "")).upper() == "ACTIVE"]
         if active_rows:
@@ -4494,6 +4597,7 @@ with _tab_fmcsa:
                 data=active_csv,
                 file_name=f"DispatchDOS_Active_{ts}.csv",
                 mime="text/csv",
+                type="primary",
                 use_container_width=True,
             )
     

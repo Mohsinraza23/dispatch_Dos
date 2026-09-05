@@ -64,6 +64,15 @@ try:
 except ImportError:
     pass
 
+# ── optional: local bulk-census cache (see local_db.py) ───────────────────────
+# No-ops entirely when dispatch_skool_scraper/data/fmcsa_local.db doesn't exist
+# (e.g. on Streamlit Cloud) — safe to import unconditionally.
+try:
+    import local_db
+    _LOCAL_DB_OK = True
+except ImportError:
+    _LOCAL_DB_OK = False
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -864,6 +873,22 @@ def scrape_carrier(
         "error_detail": "",
     }
 
+    # ── Step -1 — Local bulk-census cache (instant, no network) ─────────────
+    # Only fires when data/fmcsa_local.db exists locally; a miss (None) here
+    # always falls through to the tiers below exactly as if this step didn't
+    # run — see local_db.py docstring for why it never guesses OOS status.
+    if _LOCAL_DB_OK and search_type in ("USDOT", "MC"):
+        local_result = local_db.lookup_local(search_value, search_type)
+        if local_result is not None:
+            result.update(local_result)
+            if not include_raw_html:
+                result["raw_html"] = None
+            log.info(
+                f"[local_db] {search_type}:{search_value}  ✓  "
+                f"{result['legal_name'] or '(name not found)'}  |  {result['carrier_status']}"
+            )
+            return result
+
     # ── Step 0 — Official FMCSA API (fastest, never IP-blocked) ─────────────
     own_session = _session is None
     sess = _session or _make_session()
@@ -895,6 +920,16 @@ def scrape_carrier(
     # ── Step 2 — Playwright fallback ──────────────────────────────────────────
     if html is None and use_playwright_fallback:
         log.info(f"[playwright] {search_type}:{search_value}  ({err})")
+        # Windows: a Selector event-loop policy (e.g. set by Streamlit/Tornado
+        # when this runs inside its server process) can't create subprocesses,
+        # which breaks Playwright here with NotImplementedError. Re-assert
+        # Proactor before asyncio.run() creates this thread's loop. No-op
+        # everywhere else (Linux/Mac, or when already Proactor).
+        if sys.platform == "win32":
+            try:
+                asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            except Exception:
+                pass
         html, err = asyncio.run(
             _playwright_get(search_value, query_param, headless=headless)
         )
